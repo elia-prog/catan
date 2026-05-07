@@ -1,35 +1,51 @@
-package model;
+package model; // מגדיר שהקובץ שייך לחבילה model
 
-import javafx.scene.paint.Color;
+import javafx.scene.paint.Color; // מייבא כלי לטיפול בצבעים
+import java.util.*; // מייבא כלי עזר של ג'אווה כמו רשימות ומפות
 
-import java.util.*;
-
+/**
+ * מחלקה זו מייצגת שחקן במשחק.
+ * היא אחראית על ניהול המשאבים, קלפי הפיתוח והמבנים של השחקן.
+ */
 public class Player {
-    private String name;
-    private Color color;
-    private Map<ResourceType, Integer> resources; // התיק של השחקן
-    private int victoryPoints;
-    private boolean hasLongestRoad = false;
-    private boolean hasLargestArmy = false;
-    private List<DevCardType> devCards = new ArrayList<>(); // הקלפים שאפשר לשחק
-    private List<DevCardType> newDevCards = new ArrayList<>(); // הקלפים שנקנו בתור הנוכחי
-    private List<DevCardType> playedDevCards = new ArrayList<>(); // קלפים שכבר שומשו ונחשפו
-    private boolean playedDevCardThisTurn = false;
-    private int knightsPlayed = 0; // למעקב אחרי "הצבא הגדול ביותר" בעתיד
-    private Set<PortType> ownedPorts = new HashSet<>();
+    // --- נתונים בסיסיים של השחקן ---
+    private String name; // שם השחקן
+    private Color color; // צבע השחקן (אדום, כחול וכו')
+    private Map<ResourceType, Integer> resources; // "הארנק" של השחקן - כמה יש לו מכל משאב
+    private int victoryPoints; // נקודות ניצחון גלויות (מיישובים וערים)
+    
+    // תארים מיוחדים שנותנים נקודות
+    private boolean hasLongestRoad = false; // האם מחזיק בתואר "הדרך הארוכה ביותר"?
+    private boolean hasLargestArmy = false; // האם מחזיק בתואר "הצבא הגדול ביותר"?
 
+    // --- קלפי פיתוח ---
+    private List<DevCardType> devCards = new ArrayList<>(); // קלפים שנקנו בתורות קודמים ואפשר להשתמש בהם
+    private List<DevCardType> newDevCards = new ArrayList<>(); // קלפים שנקנו בתור הנוכחי (אי אפשר להשתמש בהם עדיין)
+    private List<DevCardType> playedDevCards = new ArrayList<>(); // קלפים שהשחקן כבר הפעיל
+    private boolean playedDevCardThisTurn = false; // האם השחקן כבר השתמש בקלף פיתוח בתור הזה?
+    private int knightsPlayed = 0; // מונה כמה קלפי אביר הופעלו (עבור תואר הצבא הגדול)
+
+    // פונקציות פשוטות לבדיקה ועדכון של קלפי פיתוח
+    /**
+     * [יעילות: O(1)] - החזרת ערך פשוט.
+     */
     public boolean hasPlayedDevCardThisTurn() { return playedDevCardThisTurn; }
+    
+    /**
+     * [יעילות: O(1)] - עדכון ערך פשוט.
+     */
     public void setPlayedDevCardThisTurn(boolean played) { this.playedDevCardThisTurn = played; }
 
-    public Set<PortType> getOwnedPorts() { return ownedPorts; }
-    public void addPort(PortType port) { if (port != null) ownedPorts.add(port); }
-
+    /**
+     * [יעילות: O(N)] - אתחול מפת המשאבים.
+     */
     public Player(String name, Color color) {
         this.name = name;
         this.color = color;
-        this.resources = new HashMap<>();
-        this.victoryPoints = 0; // מתחילים מ-0
+        this.resources = new HashMap<>(); // יוצר ארנק ריק
+        this.victoryPoints = 0;
 
+        // מאתחל את כל סוגי המשאבים ל-0 (עץ, לבנים, כבשים וכו')
         for (ResourceType type : ResourceType.values()) {
             if (type != ResourceType.NONE) {
                 resources.put(type, 0);
@@ -37,71 +53,109 @@ public class Player {
         }
     }
 
+    /**
+     * [יעילות: O(1)] - החזרת שם השחקן.
+     */
     @Override
     public String toString() {
-        return name;
+        return name; // כשמדפיסים את השחקן, נראה את השם שלו
     }
 
-    public boolean hasLongestRoad() {
-        return hasLongestRoad;
-    }
+    /**
+     * [יעילות: O(1)] - בדיקת תואר הדרך הארוכה.
+     */
+    public boolean hasLongestRoad() { return hasLongestRoad; }
+    
+    /**
+     * [יעילות: O(1)] - עדכון תואר הדרך הארוכה.
+     */
+    public void setHasLongestRoad(boolean hasLongestRoad) { this.hasLongestRoad = hasLongestRoad; }
 
-    public void setHasLongestRoad(boolean hasLongestRoad) {
-        this.hasLongestRoad = hasLongestRoad;
-    }
+    /**
+     * [יעילות: O(1)] - בדיקת תואר הצבא הגדול.
+     */
+    public boolean hasLargestArmy() { return hasLargestArmy; }
+    
+    /**
+     * [יעילות: O(1)] - עדכון תואר הצבא הגדול.
+     */
+    public void setHasLargestArmy(boolean hasLargestArmy) { this.hasLargestArmy = hasLargestArmy; }
 
-    public boolean hasLargestArmy() {
-        return hasLargestArmy;
-    }
+    // --- ניהול מבנים (Settlements, Cities, Roads) ---
+    private int settlementsBuilt = 0; // כמה יישובים בנה
+    private int citiesBuilt = 0; // כמה ערים בנה
+    private int roadsBuilt = 0; // כמה כבישים בנה
 
-    public void setHasLargestArmy(boolean hasLargestArmy) {
-        this.hasLargestArmy = hasLargestArmy;
-    }
-
-    // --- העתק את כל זה לתוך Player.java (בסוף) ---
-
-    // משתנים לספירה
-    private int settlementsBuilt = 0;
-    private int citiesBuilt = 0;
-    private int roadsBuilt = 0;
-
-    // קבועים לחוקי המשחק
+    // הגבלות המשחק המקוריות
     public static final int MAX_SETTLEMENTS = 5;
     public static final int MAX_CITIES = 4;
     public static final int MAX_ROADS = 15;
 
-    // בדיקות: האם מותר לבנות?
+    /**
+     * [יעילות: O(1)] - בדיקת מגבלת יישובים.
+     */
     public boolean canBuildSettlement() { return settlementsBuilt < MAX_SETTLEMENTS; }
+    
+    /**
+     * [יעילות: O(1)] - בדיקת מגבלת ערים.
+     */
     public boolean canBuildCity() { return citiesBuilt < MAX_CITIES; }
+    
+    /**
+     * [יעילות: O(1)] - בדיקת מגבלת כבישים.
+     */
     public boolean canBuildRoad() { return roadsBuilt < MAX_ROADS; }
 
-    // עדכונים: להגדיל את הספירה אחרי בנייה
+    /**
+     * [יעילות: O(1)] - עדכון מונה יישובים.
+     */
     public void incrementSettlements() { settlementsBuilt++; }
+    
+    /**
+     * [יעילות: O(1)] - עדכון מונה כבישים.
+     */
     public void incrementRoads() { roadsBuilt++; }
 
-    // פעולה מיוחדת לשדרוג עיר (מחזירה יישוב למלאי ומוסיפה עיר)
+    /**
+     * [יעילות: O(1)] - שדרוג יישוב לעיר: מחזיר יישוב אחד למלאי ומוריד עיר אחת מהמלאי
+     */
     public void upgradeSettlementToCity() {
         settlementsBuilt--;
         citiesBuilt++;
     }
 
+    /**
+     * [יעילות: O(1)] - החזרת מספר היישובים.
+     */
     public int getSettlementsBuilt() { return settlementsBuilt; }
+    
+    /**
+     * [יעילות: O(1)] - החזרת מספר הערים.
+     */
     public int getCitiesBuilt() { return citiesBuilt; }
+    
+    /**
+     * [יעילות: O(1)] - החזרת מספר הכבישים.
+     */
     public int getRoadsBuilt() { return roadsBuilt; }
 
+    /**
+     * [יעילות: O(D)] - חישוב סך כל נקודות הניצחון של השחקן (כולל בונוסים וקלפים נסתרים)
+     */
     public int getVictoryPoints() {
         int totalPoints = victoryPoints;
-        if (hasLongestRoad) {
-            totalPoints += 2;
-        }
-        if (hasLargestArmy) {
-            totalPoints += 2;
-        }
-        // הוספת נקודות מקלפי VP
+        // 2 נקודות בונוס על הדרך הארוכה
+        if (hasLongestRoad) totalPoints += 2;
+        // 2 נקודות בונוס על הצבא הגדול ביותר
+        if (hasLargestArmy) totalPoints += 2;
+        // הוספת נקודות מקלפי פיתוח מסוג "נקודת ניצחון" (VP)
         totalPoints += getHiddenVictoryPoints();
         return totalPoints;
     }
 
+    /**
+     * [יעילות: O(1)] - נקודות שכולם יכולים לראות על הלוח (בלי קלפי פיתוח נסתרים)
+     */
     public int getVisibleVictoryPoints() {
         int totalPoints = victoryPoints;
         if (hasLongestRoad) totalPoints += 2;
@@ -109,31 +163,50 @@ public class Player {
         return totalPoints;
     }
 
+    /**
+     * [יעילות: O(1)] - הוספת נקודות (מבנייה)
+     */
     public void addVictoryPoint(int amount) {
         this.victoryPoints += amount;
     }
 
+    /**
+     * [יעילות: O(1)] - הוספת משאבים לשחקן (למשל מהקוביות)
+     */
     public void addResource(ResourceType type, int amount) {
         if (type == ResourceType.NONE) return;
-        resources.put(type, resources.getOrDefault(type, 0) + amount);
-        System.out.println(">>> " + name + " received " + amount + " " + type);
+        int current = resources.getOrDefault(type, 0);
+        resources.put(type, current + amount);
+        System.out.println(">>> " + name + " קיבל " + amount + " " + type.toHebrew());
     }
 
+    /**
+     * [יעילות: O(1)] - החזרת שם השחקן.
+     */
     public String getName() { return name; }
+    
+    /**
+     * [יעילות: O(1)] - החזרת צבע השחקן.
+     */
     public Color getColor() { return color; }
 
-    // הדפסה נוחה של מצב השחקן
+    /**
+     * [יעילות: O(N)] - החזרת מצב המשאבים כטקסט
+     */
     public String getResourcesString() {
         return resources.toString();
     }
 
-    // בדיקה האם יש לשחקן מספיק משאבים לפי מפה של עלויות
+    /**
+     * [יעילות: O(N)] - בדיקה האם לשחקן יש מספיק משאבים כדי לשלם על משהו (למשל על כביש)
+     * @param cost מפה של המשאבים הנדרשים והכמות שלהם
+     */
     public boolean hasResources(Map<ResourceType, Integer> cost) {
         for (Map.Entry<ResourceType, Integer> entry : cost.entrySet()) {
             ResourceType type = entry.getKey();
             int amountNeeded = entry.getValue();
 
-            // אם אין לו את המשאב בכלל או שיש לו פחות ממה שצריך
+            // אם אין מספיק מאחד המשאבים, אי אפשר לקנות
             if (resources.getOrDefault(type, 0) < amountNeeded) {
                 return false;
             }
@@ -141,7 +214,9 @@ public class Player {
         return true;
     }
 
-    // תשלום (הפחתת משאבים)
+    /**
+     * [יעילות: O(N)] - ביצוע תשלום - הפחתת משאבים מהארנק
+     */
     public void payResources(Map<ResourceType, Integer> cost) {
         for (Map.Entry<ResourceType, Integer> entry : cost.entrySet()) {
             ResourceType type = entry.getKey();
@@ -152,29 +227,31 @@ public class Player {
         }
     }
 
-    // ... (בתוך Player.java)
-
-    // פונקציה לשליפת משאב אקראי (עבור גניבה)
+    /**
+     * [יעילות: O(R)] - בחירת משאב אקראי מהיד (עבור מצב שבו גונבים מהשחקן או כשהוא זורק חצי בגלל 7)
+     */
     public ResourceType stealRandomResource() {
         List<ResourceType> available = new ArrayList<>();
-        // יצירת רשימה של כל הקלפים שיש לשחקן ביד
+        // הופך את המפה לרשימה של כל הקלפים הבודדים
         for (Map.Entry<ResourceType, Integer> entry : resources.entrySet()) {
             for (int i = 0; i < entry.getValue(); i++) {
                 available.add(entry.getKey());
             }
         }
 
-        if (available.isEmpty()) return null; // אין לו כלום
+        if (available.isEmpty()) return null; // אין לו משאבים לגנוב
 
-        // בחירה אקראית
+        // הגרלת קלף אחד מתוך הרשימה
         ResourceType stolen = available.get(new java.util.Random().nextInt(available.size()));
 
-        // הסרת המשאב מהשחקן
+        // הסרת המשאב שנגנב
         removeResource(stolen, 1);
         return stolen;
     }
 
-    // פונקציית עזר להסרת משאב ספציפי
+    /**
+     * [יעילות: O(1)] - הסרת משאב ספציפי בכמות מסוימת
+     */
     public void removeResource(ResourceType type, int amount) {
         if (resources.containsKey(type)) {
             int current = resources.get(type);
@@ -184,6 +261,9 @@ public class Player {
         }
     }
 
+    /**
+     * [יעילות: O(N)] - סופר כמה קלפי משאבים יש בסך הכל ביד
+     */
     public int getTotalResourcesCount() {
         int total = 0;
         for (int count : resources.values()) {
@@ -192,53 +272,70 @@ public class Player {
         return total;
     }
 
+    /**
+     * [יעילות: O(1)] - מחזיר את מפת המשאבים
+     */
     public Map<ResourceType, Integer> getResources() {
         return resources;
     }
 
-    public void addDevCard(DevCardType card) {
-        devCards.add(card);
-    }
+    /**
+     * [יעילות: O(1)] - הוספת קלף פיתוח קיים.
+     */
+    public void addDevCard(DevCardType card) { devCards.add(card); }
+    
+    /**
+     * [יעילות: O(1)] - הוספת קלף פיתוח חדש.
+     */
+    public void addNewDevCard(DevCardType card) { newDevCards.add(card); }
+    
+    /**
+     * [יעילות: O(1)] - החזרת רשימת הקלפים החדשים.
+     */
+    public List<DevCardType> getNewDevCards() { return newDevCards; }
 
-    public void addNewDevCard(DevCardType card) {
-        newDevCards.add(card);
-    }
-
-    public List<DevCardType> getNewDevCards() {
-        return newDevCards;
-    }
-
+    /**
+     * [יעילות: O(D)] - בסוף התור, כל הקלפים שנקנו הופכים להיות "ישנים" ושמישים לתור הבא
+     */
     public void moveDevCardsToOld() {
         devCards.addAll(newDevCards);
         newDevCards.clear();
-        playedDevCardThisTurn = false;
+        playedDevCardThisTurn = false; // מאפס את האפשרות להשתמש בקלף לתור הבא
     }
 
-    public void removeDevCard(DevCardType card) {
-        devCards.remove(card);
-    }
+    /**
+     * [יעילות: O(D)] - הסרת קלף פיתוח.
+     */
+    public void removeDevCard(DevCardType card) { devCards.remove(card); }
+    
+    /**
+     * [יעילות: O(1)] - החזרת רשימת קלפי הפיתוח.
+     */
+    public List<DevCardType> getDevCards() { return devCards; }
+    
+    /**
+     * [יעילות: O(1)] - החזרת רשימת קלפי הפיתוח ששיחקו.
+     */
+    public List<DevCardType> getPlayedDevCards() { return playedDevCards; }
+    
+    /**
+     * [יעילות: O(1)] - הוספת קלף פיתוח ששוחק.
+     */
+    public void addPlayedDevCard(DevCardType card) { playedDevCards.add(card); }
 
-    public List<DevCardType> getDevCards() {
-        return devCards;
-    }
+    /**
+     * [יעילות: O(1)] - החזרת מספר האבירים ששיחקו.
+     */
+    public int getKnightsPlayed() { return knightsPlayed; }
+    
+    /**
+     * [יעילות: O(1)] - הוספת אביר ששוחק.
+     */
+    public void incrementKnightsPlayed() { this.knightsPlayed++; }
 
-    public List<DevCardType> getPlayedDevCards() {
-        return playedDevCards;
-    }
-
-    public void addPlayedDevCard(DevCardType card) {
-        playedDevCards.add(card);
-    }
-
-    public int getKnightsPlayed() {
-        return knightsPlayed;
-    }
-
-    public void incrementKnightsPlayed() {
-        this.knightsPlayed++;
-    }
-
-    // ספירה כמה קלפי ניצחון יש לו (כדי לדעת אם ניצח בסתר)
+    /**
+     * [יעילות: O(D)] - סופר כמה קלפי "נקודת ניצחון" יש לשחקן (אלו נקודות שרק הוא יודע עליהן עד סוף המשחק)
+     */
     public int getHiddenVictoryPoints() {
         int count = 0;
         for (DevCardType card : devCards) {

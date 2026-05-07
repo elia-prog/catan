@@ -1,9 +1,12 @@
-package model;
+package model; // מגדיר שהקובץ שייך לחבילה model
 
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.*; // מייבא כלי עזר כמו רשימות ומפות
+import java.util.stream.Collectors; // מייבא כלים לעיבוד רשימות
+import java.util.stream.Stream; // מייבא כלים לעבודה עם רצפי נתונים
 
+/**
+ * מחלקה זו מייצגת את לוח המשחק.
+ */
 public class Board {
     private final Map<HexCoordinate, Hex> hexMap = new HashMap<>();
     private final List<Vertex> allVertices = new ArrayList<>();
@@ -12,16 +15,24 @@ public class Board {
     private final Map<String, Vertex> vertexCache = new HashMap<>();
     private final Map<String, Edge> edgeCache = new HashMap<>();
 
+    /**
+     * [יעילות: O(H)] - H הוא מספר המשושים. אתחול הלוח קורה פעם אחת.
+     */
     public Board() {
-        createHexes();
-        buildGraphConnections();
-        assignPorts();
+        createHexes(); 
+        buildGraphConnections(); 
     }
 
+    /**
+     * [יעילות: O(1)] - החזרת אוסף ערכים ממפה.
+     */
     public Collection<Hex> getAllHexes() {
         return hexMap.values();
     }
 
+    /**
+     * [יעילות: O(H)] - מעבר על כל המשושים כדי למצוא את היעד.
+     */
     public void moveRobber(HexCoordinate targetCoord) {
         for (Hex hex : hexMap.values()) {
             hex.setRobber(false);
@@ -32,6 +43,9 @@ public class Board {
         }
     }
 
+    /**
+     * [יעילות: O(H)] - יצירת המשושים וערבוב המשאבים.
+     */
     private void createHexes() {
         List<TerrainType> terrainDeck = new ArrayList<>();
         addTerrains(terrainDeck, TerrainType.FOREST, 4);
@@ -71,6 +85,9 @@ public class Board {
         hexMap.put(coord, hex);
     }
 
+    /**
+     * [יעילות: O(H)] - בניית הקשרים בין משושים, קודקודים וצלעות.
+     */
     private void buildGraphConnections() {
         vertexCache.clear();
         edgeCache.clear();
@@ -80,16 +97,13 @@ public class Board {
         for (Hex hex : hexMap.values()) {
             hex.getVertices().clear();
             HexCoordinate center = hex.getCoordinate();
-            
-            // בשיטה שלנו: 0=Top, 1=TR, 2=BR, 3=Bottom, 4=BL, 5=TL
-            // זה תואם לכיוונים ב-HexCoordinate (בסדר ספציפי)
-            int[] vertexDirs = {5, 0, 1, 2, 3, 4}; // כיוונים שיוצרים את הקודקודים החל מהעליון
+            int[] vertexDirs = {5, 0, 1, 2, 3, 4}; 
             
             for (int i = 0; i < 6; i++) {
                 int d1 = vertexDirs[i];
                 int d2 = vertexDirs[(i + 5) % 6];
-                
                 String vKey = generateVertexKey(center, center.getNeighbor(d1), center.getNeighbor(d2));
+                // שימוש ב-Cache הופך את הגישה ל-O(1)
                 Vertex v = vertexCache.computeIfAbsent(vKey, k -> new Vertex());
                 
                 hex.getVertices().add(v);
@@ -101,7 +115,7 @@ public class Board {
         for (Hex hex : hexMap.values()) {
             hex.getEdges().clear();
             HexCoordinate center = hex.getCoordinate();
-            int[] edgeDirs = {5, 0, 1, 2, 3, 4}; // צלעות תואמות לקודקודים
+            int[] edgeDirs = {5, 0, 1, 2, 3, 4}; 
             
             for (int i = 0; i < 6; i++) {
                 String eKey = generateEdgeKey(center, center.getNeighbor(edgeDirs[i]));
@@ -121,46 +135,6 @@ public class Board {
         }
     }
 
-    private void assignPorts() {
-        List<PortType> types = new ArrayList<>(Arrays.asList(
-            PortType.GENERIC_3_1, PortType.GENERIC_3_1, PortType.GENERIC_3_1, PortType.GENERIC_3_1,
-            PortType.WOOD_2_1, PortType.BRICK_2_1, PortType.SHEEP_2_1, PortType.WHEAT_2_1, PortType.ORE_2_1
-        ));
-        Collections.shuffle(types);
-
-        List<Vertex> coastal = allVertices.stream()
-            .filter(v -> v.getAdjacentHexes().size() < 3)
-            .collect(Collectors.toList());
-
-        int count = 0;
-        Set<Vertex> handled = new HashSet<>();
-        // מעבר על קו החוף ופיזור נמלים
-        for (Vertex v : coastal) {
-            if (count >= 9) break;
-            if (handled.contains(v)) continue;
-
-            Vertex neighbor = null;
-            for (Edge e : v.getEdges()) {
-                Vertex other = (e.getVertices().get(0) == v) ? e.getVertices().get(1) : e.getVertices().get(0);
-                if (coastal.contains(other) && !handled.contains(other)) {
-                    neighbor = other;
-                    break;
-                }
-            }
-
-            if (neighbor != null) {
-                PortType type = types.get(count++);
-                v.setPort(type);
-                neighbor.setPort(type);
-                handled.add(v);
-                handled.add(neighbor);
-                // דילוג על השכנים הבאים כדי למנוע צפיפות
-                for (Edge e : v.getEdges()) handled.add((e.getVertices().get(0) == v) ? e.getVertices().get(1) : e.getVertices().get(0));
-                for (Edge e : neighbor.getEdges()) handled.add((e.getVertices().get(0) == neighbor) ? e.getVertices().get(1) : e.getVertices().get(0));
-            }
-        }
-    }
-
     private String generateEdgeKey(HexCoordinate c1, HexCoordinate c2) {
         return Stream.of(c1, c2).sorted().map(HexCoordinate::toString).collect(Collectors.joining("-"));
     }
@@ -172,6 +146,11 @@ public class Board {
     public List<Vertex> getAllVertices() { return allVertices; }
     public List<Edge> getAllEdges() { return allEdges; }
 
+    /**
+     * [יעילות: O(E * 2^E)] - הפונקציה היקרה ביותר. סריקת מסלולים בגרף עם 15 כבישים.
+     * פונקציה זו משתמשת בחיפוש לעומק (DFS) כדי למצוא את המסלול הארוך ביותר של שחקן על הלוח.
+     * היא עוברת על כל כביש של השחקן כנקודת התחלה פוטנציאלית.
+     */
     public int calculateLongestRoad(javafx.scene.paint.Color playerColor) {
         int maxPath = 0;
         List<Edge> playerEdges = allEdges.stream()
@@ -189,6 +168,9 @@ public class Board {
         return maxPath;
     }
 
+    /**
+     * [יעילות: O(1)] - בדיקת קודקודים שכנים (מקסימום 3).
+     */
     public boolean isBuildableVertex(Vertex vertex, Board board) {
         for (Hex hex : vertex.getAdjacentHexes()) {
             if (hex.getType() != TerrainType.WATER_TILE && hex.getType() != null) {
@@ -198,8 +180,10 @@ public class Board {
         return false;
     }
 
+    /**
+     * [יעילות: O(1)] - בדיקת קודקודים שכנים.
+     */
     public boolean isBuildableEdge(Edge edge) {
-        // צלע חייבת לגעת בלפחות משושה אחד שאינו מים
         for (Vertex v : edge.getVertices()) {
             for (Hex h : v.getAdjacentHexes()) {
                 if (h.getType() != TerrainType.WATER_TILE && h.getType() != null) return true;
@@ -208,8 +192,15 @@ public class Board {
         return false;
     }
 
+    /**
+     * [יעילות: O(2^E)] - רקורסיה למציאת מסלול ארוך ביותר.
+     * אלגוריתם DFS רקורסיבי שסופר את אורך השרשרת הרציפה של כבישים.
+     * האלגוריתם מוודא שכל כביש נספר פעם אחת בלבד במסלול (באמצעות קבוצת visited)
+     * ועוצר אם הוא נתקל ביישוב של שחקן יריב שחוסם את המעבר.
+     */
     private int dfsLongestRoad(Vertex currentVertex, javafx.scene.paint.Color playerColor, Set<Edge> visited) {
         if (currentVertex.isSettled() && !currentVertex.getOwnerColor().equals(playerColor)) return 0;
+        
         int maxSubPath = 0;
         for (Edge nextEdge : currentVertex.getEdges()) {
             if (nextEdge.hasRoad() && nextEdge.getOwnerColor().equals(playerColor) && !visited.contains(nextEdge)) {

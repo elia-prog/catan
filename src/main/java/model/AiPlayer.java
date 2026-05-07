@@ -1,163 +1,181 @@
-package model;
+package model; // מגדיר שהקובץ שייך לחבילה model
 
-import controller.GameEngine;
-import javafx.scene.paint.Color;
-import java.util.*;
+import controller.GameEngine; // מייבא את מנוע המשחק כדי לתקשר עם חוקי המשחק
+import javafx.scene.paint.Color; // מייבא כלי לניהול צבעים (עבור השחקנים)
+import java.util.*; // מייבא כלי עזר של ג'אווה כמו רשימות, מפות וסטים
 
+/**
+ * מחלקה זו מייצגת שחקן מחשב (בוט) היורש ממחלקת Player הבסיסית.
+ */
 public class AiPlayer extends Player {
 
-    private boolean isAdvanced;
-    private Vertex targetVertex = null;
-    private final Map<String, Integer> rejectedTrades = new HashMap<>(); // "OFFER:REQUEST" -> globalTurnCounter when rejected
+    private static class Node implements Comparable<Node> {
+        Vertex vertex;
+        double dist;
+        Node(Vertex v, double d) { this.vertex = v; this.dist = d; }
+        @Override public int compareTo(Node o) { return Double.compare(this.dist, o.dist); }
+    }
 
+    private boolean isAdvanced; // משתנה הקובע אם הבוט משתמש באסטרטגיה מתקדמת
+    private Vertex targetVertex = null; // הקודקוד (המיקום) שהבוט שואף לבנות עליו כרגע
+    private final Map<String, Integer> rejectedTrades = new HashMap<>(); // מעקב אחרי הצעות מסחר שנדחו בתור הנוכחי
+
+    // בנאי המאתחל את הבוט עם שם, צבע ורמת אינטליגנציה
     public AiPlayer(String name, Color color, boolean isAdvanced) {
-        super(name, color);
-        this.isAdvanced = isAdvanced;
+        super(name, color); // קריאה לבנאי של מחלקת האב (Player)
+        this.isAdvanced = isAdvanced; // הגדרת רמת הקושי של הבוט
     }
 
-    public void markTradeAsRejected(ResourceType offered, ResourceType requested, int currentTurn) {
-        rejectedTrades.put(offered.name() + ":" + requested.name(), currentTurn);
+    /**
+     * [יעילות: O(1)] - רישום דחיית מסחר במפה.
+     */
+    public void markTradeAsRejected(ResourceType offered, int offeredAmt, ResourceType requested, int requestedAmt, int currentTurn) {
+        String key = offered.name() + ":" + offeredAmt + ":" + requested.name() + ":" + requestedAmt;
+        rejectedTrades.put(key, currentTurn); // הוספה למפת הדחיות
     }
 
+    /**
+     * [Decision Pipeline] - המנוע המרכזי של הבוט.
+     * מבצע פעולה אחת לפי סדר עדיפויות קשיח ומחזיר תיאור של הפעולה או null.
+     */
     public String makeSingleAction(GameEngine engine) {
-        // --- המתנה לזריקת משאבים של כל השחקנים (יציאת 7) ---
-        if (!engine.getPlayersNeedingToDiscard().isEmpty()) {
-            return "ממתין לשחקנים שיזרקו משאבים...";
-        }
+        if (handleEmergency(engine)) return "טפלתי במצב חירום (שודד/זריקת קלפים).";
+        
+        updateTargetLock(engine); // וידוא שהמטרה נעולה ותקפה
+        
+        String buildAction = executeTargetBuild(engine);
+        if (buildAction != null) return buildAction;
+        
+        String upgradeAction = executeUpgrades(engine);
+        if (upgradeAction != null) return upgradeAction;
+        
+        String economyAction = executeEconomy(engine);
+        if (economyAction != null) return economyAction;
+        
+        return null; // לא בוצעה אף פעולה, סוף תור
+    }
+
+    /**
+     * עדיפות 1: טיפול במצבים קריטיים.
+     */
+    private boolean handleEmergency(GameEngine engine) {
+        if (!engine.getPlayersNeedingToDiscard().isEmpty()) return true;
 
         if (engine.isRobberMode()) {
-            System.out.println("[" + getName() + "] Thought: Robber mode active. Moving robber...");
             moveRobberAi(engine);
             engine.setRobberMode(false);
-            return "הזזתי את השודד כדי לחסום איום.";
+            return true;
         }
 
-        // --- חוק סיבוב ראשון: מניעת פעולות בנייה ומסחר שהמנוע חוסם ---
-        if (engine.getTurnCounter() <= engine.getPlayers().size()) {
-            return null; // סיום תור מיידי אחרי הגלגול
+        if (!hasPlayedDevCardThisTurn() && getDevCards().contains(DevCardType.KNIGHT) && isRobberBlockingMe(engine)) {
+            engine.playDevCard(DevCardType.KNIGHT);
+            return true;
         }
 
-        // --- מנגנון פאניקה (Panic Mode) ---
-        // אם יש לי 7 משאבים או יותר, אנסה לבנות *משהו* כדי לא לאבד אותם ב-7
-        boolean panicMode = (getTotalResourcesCount() >= 7);
+        return false;
+    }
 
-        // שלב המשחק: התפשטות (יישובים) לעומת העמקה (ערים)
-        // בוט יתעדף יישובים עד שיהיו לו 4 לפחות (2 התחלתיים + 2 חדשים)
-        boolean expansionPhase = (getSettlementsBuilt() < 4);
-
-        // תכנון אסטרטגי רציף המשלב חסימות
-        planBestStrategy(engine);
-
-        // --- Proactive Trade Offering ---
-        if (!engine.isSetupPhase() && engine.getTurnCounter() > engine.getPlayers().size()) {
-            String botTradeOffer = proposeTradeToHuman(engine);
-            if (botTradeOffer != null) {
-                System.out.println("[" + getName() + "] Thought: Proposing trade to human: " + botTradeOffer);
-                return botTradeOffer;
-            }
+    /**
+     * ניהול נעילת המטרה.
+     */
+    private void updateTargetLock(GameEngine engine) {
+        if (this.targetVertex == null || !isTargetStillValid(this.targetVertex, engine)) {
+            planBestStrategy(engine);
         }
+    }
 
-        // --- עדיפות 1: שימוש בקלפי פיתוח קיימים (לפני בנייה) ---
-        if (!hasPlayedDevCardThisTurn()) {
-            if (getDevCards().contains(DevCardType.KNIGHT) && isRobberBlockingMe(engine)) {
-                System.out.println("[" + getName() + "] Decision: PLAY_KNIGHT to unblock resources.");
-                engine.playDevCard(DevCardType.KNIGHT);
-                return "השתמשתי באביר כדי להזיז את השודד.";
-            }
-            if (getDevCards().contains(DevCardType.YEAR_OF_PLENTY) && panicMode) {
-                System.out.println("[" + getName() + "] Decision: PLAY_YEAR_OF_PLENTY in Panic Mode.");
-                engine.playDevCard(DevCardType.YEAR_OF_PLENTY, ResourceType.WOOD, ResourceType.BRICK);
-                return "השתמשתי בקלף 'שנת שפע' כדי לבנות מייד.";
-            }
-        }
+    /**
+     * עדיפות 2: בניית יישוב ביעד או סלילת הדרך אליו.
+     */
+    private String executeTargetBuild(GameEngine engine) {
+        if (this.targetVertex == null) return null;
 
-        // --- עדיפות 2: בניית יישוב (הכי חשוב בשלב ההתפשטות) ---
-        if (targetVertex != null && isConnectedToMyRoads(targetVertex) && canBuildSettlement()) {
+        if (isConnectedToMyRoads(this.targetVertex) && canBuildSettlement()) {
             if (hasResources(GameEngine.SETTLEMENT_COST)) {
-                String res = engine.attemptBuildSettlement(targetVertex);
+                String res = engine.attemptBuildSettlement(this.targetVertex);
                 if (res != null && res.contains("SUCCESS")) {
-                    System.out.println("[" + getName() + "] Decision: BUILD_SETTLEMENT at " + targetVertex);
-                    if (targetVertex.getPort() != null) addPort(targetVertex.getPort());
-                    targetVertex = null;
+                    this.targetVertex = null;
                     return "בניתי יישוב במיקום אסטרטגי.";
                 }
             }
         }
 
-        // --- עדיפות 3: בניית דרך לעבר המטרה ---
-        if (targetVertex != null && canBuildRoad()) {
-            boolean hasFreeRoads = engine.getRoadBuildingRemaining() > 0;
-            boolean canAfford = hasResources(GameEngine.ROAD_COST);
-            
-            if (hasFreeRoads || canAfford) {
-                Edge road = findRoadTowardsTarget(engine, targetVertex);
-                if (road != null) {
+        if (canBuildRoad()) {
+            Edge road = findRoadTowardsTarget(engine, this.targetVertex);
+            if (road != null) {
+                boolean freeRoads = engine.getRoadBuildingRemaining() > 0;
+                if (freeRoads || hasResources(GameEngine.ROAD_COST)) {
                     String res = engine.attemptBuildRoad(road);
-                    if (res != null && res.contains("SUCCESS")) {
-                        System.out.println("[" + getName() + "] Decision: BUILD_ROAD towards target.");
-                        return "בניתי דרך לכיוון המטרה האסטרטגית.";
-                    }
+                    if (res != null && res.contains("SUCCESS")) return "בניתי דרך לכיוון המטרה האסטרטגית.";
                 }
             }
         }
 
-        // --- עדיפות 4: שדרוג לעיר (רק אם לא בשלב התפשטות קריטי או אם יש עודף משאבים) ---
-        if (!expansionPhase || hasResources(Map.of(ResourceType.ORE, 5, ResourceType.WHEAT, 4))) {
-            if (canBuildCity()) {
-                Vertex upgradeSpot = findBestCityUpgradeSpot(engine);
-                if (upgradeSpot != null && hasResources(GameEngine.CITY_COST)) {
-                    String res = engine.attemptUpgradeCity(upgradeSpot);
-                    if (res != null && res.contains("SUCCESS")) {
-                        System.out.println("[" + getName() + "] Decision: UPGRADE_CITY at " + upgradeSpot);
-                        return "שדרגתי יישוב לעיר.";
-                    }
-                }
-            }
-        }
-
-        // --- עדיפות 5: קניית קלף פיתוח (רק אם אין מה לבנות או אם ב'פאניקה') ---
-        if (hasResources(GameEngine.DEV_CARD_COST)) {
-            // אם אנחנו ב'פאניקה' או אם כבר יש לנו מספיק יישובים או אם פשוט אין איפה לבנות
-            if (panicMode || !expansionPhase || targetVertex == null) {
-                String res = engine.buyDevCard();
-                if (res != null && (res.contains("BOUGHT") || res.contains("נקנה"))) {
-                    System.out.println("[" + getName() + "] Decision: BUY_DEV_CARD.");
-                    return "קניתי קלף פיתוח.";
-                }
-            }
-        }
-
-        // --- מסחר אחרון לפני סיום תור ---
-        String p2pTrade = tryToTradeWithPlayers(engine, !expansionPhase);
-        if (p2pTrade != null) {
-            System.out.println("[" + getName() + "] Thought: Player trade successful.");
-            return p2pTrade;
-        }
-
-        String tradeDesc = tryToTradeStrategic(engine, !expansionPhase);
-        if (tradeDesc != null) {
-            System.out.println("[" + getName() + "] Thought: Strategic maritime trade performed.");
-            return tradeDesc;
-        }
-
-        return null; 
+        return null;
     }
 
-    private String tryToTradeWithPlayers(GameEngine engine, boolean cityPhase) {
-        ResourceType needed = findNeededResource(cityPhase);
-        if (needed == null) return null;
+    /**
+     * עדיפות 3: שדרוג יישובים קיימים לערים.
+     */
+    private String executeUpgrades(GameEngine engine) {
+        if (!canBuildCity()) return null;
+        
+        if (this.targetVertex == null || hasResources(Map.of(ResourceType.ORE, 5, ResourceType.WHEAT, 4))) {
+            Vertex upgradeSpot = findBestCityUpgradeSpot(engine);
+            if (upgradeSpot != null && hasResources(GameEngine.CITY_COST)) {
+                String res = engine.attemptUpgradeCity(upgradeSpot);
+                if (res != null && res.contains("SUCCESS")) return "שדרגתי יישוב לעיר.";
+            }
+        }
+        return null;
+    }
 
-        for (ResourceType myExcess : ResourceType.values()) {
-            if (myExcess != ResourceType.NONE && getResources().getOrDefault(myExcess, 0) >= 3) {
-                Map<ResourceType, Integer> give = Map.of(myExcess, 1);
-                Map<ResourceType, Integer> get = Map.of(needed, 1);
-                
-                for (Player other : engine.getPlayers()) {
-                    if (other != this && other instanceof AiPlayer) {
-                        AiPlayer otherAi = (AiPlayer) other;
-                        if (otherAi.evaluateTradeOffer(give, get, this)) {
-                            return engine.executeTrade(this, otherAi, give, get);
-                        }
+    /**
+     * עדיפות 4: מסחר ממוקד או קניית קלפי פיתוח.
+     */
+    private String executeEconomy(GameEngine engine) {
+        if (this.targetVertex != null) {
+            Map<ResourceType, Integer> cost = isConnectedToMyRoads(this.targetVertex) ? 
+                                              GameEngine.SETTLEMENT_COST : GameEngine.ROAD_COST;
+            
+            for (ResourceType missing : cost.keySet()) {
+                if (getResources().getOrDefault(missing, 0) < cost.get(missing)) {
+                    String tradeResult = tryTargetedTrade(engine, missing);
+                    if (tradeResult != null) return tradeResult;
+
+                    if (tryTargetedBankTrade(engine, missing)) 
+                        return "ביצעתי מסחר מול הבנק עבור " + missing.toHebrew();
+                }
+            }
+        }
+
+        if (hasResources(GameEngine.DEV_CARD_COST)) {
+            String res = engine.buyDevCard();
+            if (res != null && (res.contains("BOUGHT") || res.contains("נקנה"))) return "קניתי קלף פיתוח.";
+        }
+
+        return null;
+    }
+
+    private String tryTargetedTrade(GameEngine engine, ResourceType needed) {
+        ResourceType surplus = findSurplusResource(needed);
+        if (surplus == null) return null;
+
+        Map<ResourceType, Integer> offer = Map.of(surplus, 1);
+        Map<ResourceType, Integer> request = Map.of(needed, 1);
+
+        for (Player other : engine.getPlayers()) {
+            if (other == this) continue;
+            if (other.getResources().getOrDefault(needed, 0) >= 1) {
+                if (other instanceof AiPlayer) {
+                    if (((AiPlayer) other).evaluateTradeOffer(offer, request, this)) {
+                        engine.executeTrade(this, (AiPlayer)other, offer, request);
+                        return "מסחר בין בוטים: " + getName() + " נתן " + surplus.toHebrew() + " ל-" + other.getName() + " בתמורה ל-" + needed.toHebrew();
+                    }
+                } else {
+                    String key = surplus.name() + ":1:" + needed.name() + ":1";
+                    if (rejectedTrades.getOrDefault(key, -1) != engine.getTurnCounter()) {
+                        return "TRADE_OFFER:" + getName() + ":" + surplus.name() + ":" + needed.name();
                     }
                 }
             }
@@ -165,270 +183,90 @@ public class AiPlayer extends Player {
         return null;
     }
 
-    private String tryToTradeStrategic(GameEngine engine, boolean cityPhase) {
-        for (ResourceType typeToGive : ResourceType.values()) {
-            if (typeToGive == ResourceType.NONE) continue;
-            
-            int ratio = engine.getTradeRatio(this, typeToGive);
-            if (getResources().getOrDefault(typeToGive, 0) >= ratio) {
-                ResourceType typeToGet = findNeededResource(cityPhase);
-                if (typeToGet != null && typeToGet != typeToGive) {
-                    removeResource(typeToGive, ratio);
-                    addResource(typeToGet, 1);
-                    return "Maritime Trade: " + ratio + " " + typeToGive + " for 1 " + typeToGet;
-                }
+    private boolean tryTargetedBankTrade(GameEngine engine, ResourceType needed) {
+        for (ResourceType surplus : ResourceType.values()) {
+            if (surplus == ResourceType.NONE || surplus == needed) continue;
+            int ratio = engine.getTradeRatio(this, surplus);
+            if (getResources().getOrDefault(surplus, 0) >= ratio) {
+                String res = engine.executeBankTrade(this, surplus, needed);
+                return res.startsWith("SUCCESS");
+            }
+        }
+        return false;
+    }
+
+    private ResourceType findSurplusResource(ResourceType exclude) {
+        for (ResourceType type : ResourceType.values()) {
+            if (type != ResourceType.NONE && type != exclude && getResources().getOrDefault(type, 0) >= 3) {
+                return type;
             }
         }
         return null;
     }
 
     private void planBestStrategy(GameEngine engine) {
-        // אם המטרה הנוכחית נתפסה ע"י מישהו אחר או נחסמה (כלל המרחק), נתאפס
-        if (this.targetVertex != null && (this.targetVertex.isSettled() || this.targetVertex.isTooCloseToSettlement())) {
-            this.targetVertex = null;
-        }
-
         Vertex bestSpot = null;
         double maxScore = -1000;
-        
         for (Vertex v : engine.getBoard().getAllVertices()) {
             if (!v.isSettled() && !v.isTooCloseToSettlement() && engine.getBoard().isBuildableVertex(v, engine.getBoard())) {
-                int distance = getDistanceToMyNetwork(v);
-                if (distance >= 100 || distance > 6) continue;
-
-                int probScore = calculateVertexScore(v);
-                double score = probScore * 10.0;
-                score -= (distance * 15.0); // קנס מרחק
-
-                if (isAdvanced) {
-                    // --- לוגיקת חסימה ותחרות (Blocking & Competition) - ADVANCED ONLY ---
-                    for (Player other : engine.getPlayers()) {
-                        if (other != this) {
-                            // זיהוי אם יריב בנה דרך לכיוון הנקודה הזו (חסימה אקטיבית)
-                            for (Edge e : v.getEdges()) {
-                                if (e.hasRoad() && e.getOwnerColor().equals(other.getColor())) {
-                                    if (distance <= 1) score += 40; 
-                                    else score -= 20; 
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (score > maxScore) { 
-                    maxScore = score; 
-                    bestSpot = v; 
+                List<Edge> path = getPathToTarget(engine, v);
+                if (path != null) {
+                    double dijkstraCost = path.isEmpty() ? 0.5 : path.size();
+                    int probScore = calculateVertexScore(v);
+                    double score = (probScore * 10.0) / dijkstraCost;
+                    if (score > maxScore) { maxScore = score; bestSpot = v; }
                 }
             }
         }
         this.targetVertex = bestSpot;
     }
 
-    private Edge findRoadToExtendMyPath(GameEngine engine) {
-        // חיפוש דרך שמאריכה את הרצף הנוכחי
-        for (Edge e : engine.getBoard().getAllEdges()) {
-            if (!e.hasRoad() && isConnectedToMyNetwork(e) && engine.getBoard().isBuildableEdge(e)) {
-                return e;
-            }
-        }
-        return null;
-    }
-
     public boolean evaluateTradeOffer(Map<ResourceType, Integer> offered, Map<ResourceType, Integer> requested, Player proposer) {
-        if (isAdvanced) {
-            if (proposer.getVisibleVictoryPoints() >= 9) return false; 
-            if (isThreateningMyTitles(proposer)) return false;
-        }
-
+        if (isAdvanced && proposer.getVictoryPoints() >= 9) return false; 
         for (Map.Entry<ResourceType, Integer> entry : requested.entrySet()) {
             if (getResources().getOrDefault(entry.getKey(), 0) < entry.getValue()) return false;
         }
-
         boolean expansionPhase = (getSettlementsBuilt() < 4);
         double valueReceived = 0;
-        for (Map.Entry<ResourceType, Integer> entry : offered.entrySet()) {
-            valueReceived += entry.getValue() * getDynamicResourceWeight(entry.getKey(), expansionPhase);
-        }
-
+        for (Map.Entry<ResourceType, Integer> entry : offered.entrySet()) valueReceived += entry.getValue() * getDynamicResourceWeight(entry.getKey(), expansionPhase);
         double valueGiven = 0;
-        for (Map.Entry<ResourceType, Integer> entry : requested.entrySet()) {
-            valueGiven += entry.getValue() * getDynamicResourceWeight(entry.getKey(), expansionPhase);
-        }
-
-        if (isAdvanced) {
-            // בונוס "השלמת בנייה": אם המסחר נותן לי בדיוק מה שחסר לי לבנות יישוב/דרך
-            if (wouldCompleteBuildAfterTrade(offered, requested)) {
-                valueReceived *= 1.5; 
-            }
-
-            // הגנה מפני שבירת זוגות (עץ-לבנה או ברזל-חיטה) שצריך לבנייה
-            if (expansionPhase) {
-                // אם אני נותן לבנה ויש לי אותה כמות עץ (או פחות), זה פוגע ביכולת לבנות דרך/יישוב
-                if (requested.containsKey(ResourceType.BRICK) && !offered.containsKey(ResourceType.WOOD)) {
-                    int brick = getResources().getOrDefault(ResourceType.BRICK, 0);
-                    int wood = getResources().getOrDefault(ResourceType.WOOD, 0);
-                    if (brick <= wood && brick <= 2) valueGiven *= 1.4;
-                }
-                if (requested.containsKey(ResourceType.WOOD) && !offered.containsKey(ResourceType.BRICK)) {
-                    int wood = getResources().getOrDefault(ResourceType.WOOD, 0);
-                    int brick = getResources().getOrDefault(ResourceType.BRICK, 0);
-                    if (wood <= brick && wood <= 2) valueGiven *= 1.4;
-                }
-            } else {
-                // בשלב הערים: ברזל וחיטה
-                if (requested.containsKey(ResourceType.ORE) && !offered.containsKey(ResourceType.WHEAT)) {
-                    int ore = getResources().getOrDefault(ResourceType.ORE, 0);
-                    int wheat = getResources().getOrDefault(ResourceType.WHEAT, 0);
-                    if (ore <= 3) valueGiven *= 1.3;
-                }
-            }
-        }
-
-        // סף גמישות משתנה: מתחיל נמוך (גמיש) ועולה ככל שהמשחק מתקדם
-        double baseThreshold = expansionPhase ? 0.85 : 1.1;
-        double threshold = baseThreshold;
-
-        if (isAdvanced) {
-            // הקשחה לפי נקודות היריב (החל מ-3 נקודות)
-            double competitionPenalty = Math.max(0, (proposer.getVisibleVictoryPoints() - 3) * 0.1);
-            threshold += competitionPenalty;
-        }
-
-        if (getTotalResourcesCount() >= 7) threshold -= 0.2; // פאניקה מ-7
-
+        for (Map.Entry<ResourceType, Integer> entry : requested.entrySet()) valueGiven += entry.getValue() * getDynamicResourceWeight(entry.getKey(), expansionPhase);
+        double threshold = expansionPhase ? 0.85 : 1.1;
+        if (getTotalResourcesCount() >= 7) threshold -= 0.2;
         return valueReceived >= (valueGiven * threshold);
-    }
-
-    private boolean wouldCompleteBuildAfterTrade(Map<ResourceType, Integer> offered, Map<ResourceType, Integer> requested) {
-        if (targetVertex == null) return false;
-        Map<ResourceType, Integer> cost = isConnectedToMyRoads(targetVertex) ? GameEngine.SETTLEMENT_COST : GameEngine.ROAD_COST;
-        
-        for (ResourceType type : cost.keySet()) {
-            int current = getResources().getOrDefault(type, 0);
-            int after = current - requested.getOrDefault(type, 0) + offered.getOrDefault(type, 0);
-            if (current < cost.get(type) && after >= cost.get(type)) return true;
-        }
-        return false;
-    }
-
-
-    private boolean isThreateningMyTitles(Player p) {
-        if (this.hasLongestRoad() && p.getRoadsBuilt() >= getRoadsBuilt() - 1) return true;
-        if (this.hasLargestArmy() && p.getKnightsPlayed() >= getKnightsPlayed() - 1) return true;
-        return false;
     }
 
     private double getDynamicResourceWeight(ResourceType type, boolean expansionPhase) {
         if (type == ResourceType.NONE) return 0.0;
         int count = getResources().getOrDefault(type, 0);
         double weight = 1.0;
-
-        if (isAdvanced) {
-            // משקולות לפי שלב המשחק - ADVANCED ONLY
-            if (expansionPhase) {
-                // בשלב ההתפשטות: עץ ולבנה הם המלך, ברזל וחיטה פחות חשובים
-                if (type == ResourceType.WOOD || type == ResourceType.BRICK) weight = 2.0;
-                if (type == ResourceType.ORE || type == ResourceType.WHEAT) weight = 0.7;
-            } else {
-                // בשלב המאוחר: ברזל וחיטה (ערים/קלפים) הם המלך
-                if (type == ResourceType.ORE || type == ResourceType.WHEAT) weight = 2.0;
-                if (type == ResourceType.WOOD || type == ResourceType.BRICK) weight = 0.7;
-            }
-
-            if (count == 0) weight *= 2.0; 
-            if (count == 1) weight *= 1.4; // הגנה על האחרון
-            if (isNeededForCurrentGoal(type)) weight *= 1.6;
-            if (count >= 3) weight *= 0.5; 
-        } else {
-            // פשוט ורעבתני (Greedy/Basic)
-            if (type == ResourceType.ORE || type == ResourceType.WHEAT) weight = 1.2;
-            if (type == ResourceType.WOOD || type == ResourceType.BRICK) weight = 1.2;
-            if (count > 4) weight *= 0.3; // עודף משמעותי
-        }
-        
+        if (expansionPhase) { if (type == ResourceType.WOOD || type == ResourceType.BRICK) weight = 2.0; }
+        else { if (type == ResourceType.ORE || type == ResourceType.WHEAT) weight = 2.0; }
+        if (count == 0) weight *= 2.0;
+        if (count >= 3) weight *= 0.5;
         return weight;
-    }
-
-    private boolean isNeededForCurrentGoal(ResourceType type) {
-        if (targetVertex == null) return false;
-        if (GameEngine.SETTLEMENT_COST.containsKey(type) && getResources().getOrDefault(type, 0) < GameEngine.SETTLEMENT_COST.get(type)) return true;
-        if (GameEngine.ROAD_COST.containsKey(type) && getResources().getOrDefault(type, 0) < GameEngine.ROAD_COST.get(type)) return true;
-        return false;
     }
 
     public int calculateVertexScore(Vertex v) {
         int score = 0;
-        for (Hex hex : v.getAdjacentHexes()) score += getProbabilityWeight(hex.getNumberToken());
+        for (Hex hex : v.getAdjacentHexes()) {
+            int num = hex.getNumberToken();
+            switch (num) {
+                case 6: case 8:  score += 5; break;
+                case 5: case 9:  score += 4; break;
+                case 4: case 10: score += 3; break;
+                case 3: case 11: score += 2; break;
+                case 2: case 12: score += 1; break;
+            }
+        }
         return score;
-    }
-
-    public int getProbabilityWeight(int number) {
-        switch (number) {
-            case 2: case 12: return 1;
-            case 3: case 11: return 2;
-            case 4: case 10: return 3;
-            case 5: case 9:  return 4;
-            case 6: case 8:  return 5;
-            default: return 0;
-        }
-    }
-
-    private String proposeTradeToHuman(GameEngine engine) {
-        if (getTotalResourcesCount() < 4) return null;
-        ResourceType need = findNeededResource(false);
-        ResourceType surplus = findSurplusResource();
-        if (need != null && surplus != null && need != surplus) {
-            // בדוק אם ההצעה הזו נדחתה לאחרונה (צינון של 3 סיבובים)
-            String tradeKey = surplus.name() + ":" + need.name();
-            if (rejectedTrades.containsKey(tradeKey)) {
-                if (engine.getTurnCounter() - rejectedTrades.get(tradeKey) < 3) {
-                    return null;
-                }
-            }
-
-            Player human = engine.getPlayerByName("אתה");
-            if (human != null && human.getResources().getOrDefault(need, 0) > 0) {
-                return "TRADE_PROPOSAL:" + surplus.name() + ":" + need.name();
-            }
-        }
-        return null;
-    }
-
-    private ResourceType findNeededResource(boolean cityPhase) {
-        if (cityPhase) {
-            if (getResources().getOrDefault(ResourceType.ORE, 0) < 3) return ResourceType.ORE;
-            if (getResources().getOrDefault(ResourceType.WHEAT, 0) < 2) return ResourceType.WHEAT;
-        } else {
-            if (getResources().getOrDefault(ResourceType.WOOD, 0) == 0) return ResourceType.WOOD;
-            if (getResources().getOrDefault(ResourceType.BRICK, 0) == 0) return ResourceType.BRICK;
-            if (getResources().getOrDefault(ResourceType.WHEAT, 0) == 0) return ResourceType.WHEAT;
-            if (getResources().getOrDefault(ResourceType.SHEEP, 0) == 0) return ResourceType.SHEEP;
-        }
-        return null;
-    }
-
-    private ResourceType findSurplusResource() {
-        // עדיפות 1: משאבים עם 3 ומעלה
-        for (ResourceType type : ResourceType.values()) {
-            if (type != ResourceType.NONE && getResources().getOrDefault(type, 0) >= 3) return type;
-        }
-        // עדיפות 2: משאבים עם 2 (רק אם יש צורך דחוף במשהו אחר)
-        for (ResourceType type : ResourceType.values()) {
-            if (type != ResourceType.NONE && getResources().getOrDefault(type, 0) >= 2) return type;
-        }
-        return null;
     }
 
     public void makeSetupMove(GameEngine engine) {
         Vertex bestSpot = findBestSetupSpot(engine);
         if (bestSpot != null) {
             Edge bestRoad = null;
-            for (Edge e : bestSpot.getEdges()) {
-                if (!e.hasRoad()) {
-                    bestRoad = e;
-                    break;
-                }
-            }
+            for (Edge e : bestSpot.getEdges()) { if (!e.hasRoad()) { bestRoad = e; break; } }
             if (bestRoad != null) {
                 engine.handleSetupInteraction(bestSpot, null);
                 engine.handleSetupInteraction(null, bestRoad);
@@ -450,15 +288,16 @@ public class AiPlayer extends Player {
     private void moveRobberAi(GameEngine engine) {
         Hex bestHex = null; int maxScore = -1;
         for (Hex hex : engine.getBoard().getAllHexes()) {
-            if (hex.hasRobber() || hex.getType() == TerrainType.DESERT || hex.getType() == TerrainType.WATER_TILE) continue;
-            int score = 0; boolean hasMyBuilding = false;
-            for (Vertex v : hex.getVertices()) {
-                if (v.isSettled()) {
-                    if (v.getOwnerColor().equals(getColor())) hasMyBuilding = true;
-                    else score += (v.isCity() ? 2 : 1) * getProbabilityWeight(hex.getNumberToken());
+            if (!hex.hasRobber() && hex.getType() != TerrainType.DESERT && hex.getType() != TerrainType.WATER_TILE) {
+                int score = 0; boolean hasMyBuilding = false;
+                for (Vertex v : hex.getVertices()) {
+                    if (v.isSettled()) {
+                        if (v.getOwnerColor().equals(getColor())) hasMyBuilding = true;
+                        else score += (v.isCity() ? 2 : 1);
+                    }
                 }
+                if (!hasMyBuilding && score > maxScore) { maxScore = score; bestHex = hex; }
             }
-            if (!hasMyBuilding && score > maxScore) { maxScore = score; bestHex = hex; }
         }
         if (bestHex != null) {
             engine.handleRobberMove(bestHex);
@@ -467,78 +306,61 @@ public class AiPlayer extends Player {
         }
     }
 
+    private boolean isTargetStillValid(Vertex target, GameEngine engine) {
+        if (target.isSettled() || target.isTooCloseToSettlement()) return false;
+        return getPathToTarget(engine, target) != null;
+    }
+
+    private List<Edge> getPathToTarget(GameEngine engine, Vertex target) {
+        if (isConnectedToMyRoads(target)) return new ArrayList<>();
+        PriorityQueue<Node> pq = new PriorityQueue<>();
+        Map<Vertex, Double> distances = new HashMap<>();
+        Map<Vertex, Edge> edgeTo = new HashMap<>();
+        Map<Vertex, Vertex> parentVertex = new HashMap<>();
+        for (Vertex v : engine.getBoard().getAllVertices()) {
+            if (isConnectedToMyRoads(v) || (v.isSettled() && v.getOwnerColor().equals(getColor()))) {
+                distances.put(v, 0.0); pq.add(new Node(v, 0.0));
+            } else { distances.put(v, Double.MAX_VALUE); }
+        }
+        while (!pq.isEmpty()) {
+            Node current = pq.poll(); Vertex u = current.vertex;
+            if (u == target) break;
+            if (current.dist > distances.get(u)) continue;
+            for (Edge e : u.getEdges()) {
+                if (engine.getBoard().isBuildableEdge(e) && (!e.hasRoad() || e.getOwnerColor().equals(getColor()))) {
+                    Vertex v = null;
+                    for (Vertex neighbor : e.getVertices()) if (neighbor != u) v = neighbor;
+                    if (v == null || (v.isSettled() && !v.getOwnerColor().equals(getColor()))) continue;
+                    double newDist = distances.get(u) + 1.0;
+                    if (newDist < distances.get(v)) {
+                        distances.put(v, newDist); edgeTo.put(v, e); parentVertex.put(v, u);
+                        pq.add(new Node(v, newDist));
+                    }
+                }
+            }
+        }
+        if (!edgeTo.containsKey(target)) return null;
+        List<Edge> fullPath = new ArrayList<>(); Vertex curr = target;
+        while (edgeTo.containsKey(curr)) {
+            fullPath.add(0, edgeTo.get(curr)); curr = parentVertex.get(curr);
+        }
+        return fullPath;
+    }
+
     private Edge findRoadTowardsTarget(GameEngine engine, Vertex target) {
-        Edge bestRoad = null; int minDistance = 100;
-        for (Edge edge : engine.getBoard().getAllEdges()) {
-            if (!edge.hasRoad() && isConnectedToMyNetwork(edge) && engine.getBoard().isBuildableEdge(edge)) {
-                for (Vertex v : edge.getVertices()) {
-                    int dist = getDistance(v, target);
-                    if (dist < minDistance) { minDistance = dist; bestRoad = edge; }
-                }
-            }
+        List<Edge> path = getPathToTarget(engine, target);
+        if (path != null && !path.isEmpty()) {
+            for (Edge e : path) if (!e.hasRoad()) return e;
         }
-        return bestRoad;
-    }
-
-    private int getDistance(Vertex start, Vertex end) {
-        if (start == end) return 0;
-        List<Vertex> queue = new ArrayList<>(); Map<Vertex, Integer> distances = new HashMap<>();
-        queue.add(start); distances.put(start, 0); int head = 0;
-        while(head < queue.size()) {
-            Vertex current = queue.get(head++); int dist = distances.get(current);
-            if (current == end) return dist; if (dist > 15) continue;
-            
-            // אי אפשר לעבור דרך יישוב של יריב
-            if (current.isSettled() && !current.getOwnerColor().equals(this.getColor())) continue;
-
-            for (Edge e : current.getEdges()) {
-                // אי אפשר לעבור דרך כביש של יריב
-                if (!e.hasRoad() || e.getOwnerColor().equals(this.getColor())) {
-                    for (Vertex neighbor : e.getVertices()) {
-                        if (neighbor != current && !distances.containsKey(neighbor)) {
-                            distances.put(neighbor, dist + 1); queue.add(neighbor);
-                        }
-                    }
-                }
-            }
-        }
-        return 100;
-    }
-
-    private int getDistanceToMyNetwork(Vertex targetVertex) {
-        if (isConnectedToMyRoads(targetVertex)) return 0;
-        List<Vertex> queue = new ArrayList<>(); Map<Vertex, Integer> distances = new HashMap<>();
-        queue.add(targetVertex); distances.put(targetVertex, 0); int head = 0;
-        while(head < queue.size()) {
-            Vertex current = queue.get(head++); int dist = distances.get(current);
-            if (isConnectedToMyRoads(current)) return dist; if (dist >= 6) continue;
-            
-            // אם הקודקוד הנוכחי תפוס ע"י מישהו אחר, אי אפשר לעבור דרכו
-            if (current.isSettled() && !current.getOwnerColor().equals(this.getColor())) continue;
-
-            for (Edge e : current.getEdges()) {
-                // אפשר לעבור רק דרך צלעות פנויות או צלעות שלי
-                if (!e.hasRoad() || e.getOwnerColor().equals(this.getColor())) {
-                    for (Vertex neighbor : e.getVertices()) {
-                        if (neighbor != current && !distances.containsKey(neighbor)) {
-                            distances.put(neighbor, dist + 1); queue.add(neighbor);
-                        }
-                    }
-                }
-            }
-        }
-        return 100;
+        return null;
     }
 
     private boolean isConnectedToMyNetwork(Edge edge) {
         for (Vertex v : edge.getVertices()) {
-            // אם יש שם יישוב שלי - זה מחובר
-            if (v.isSettled() && v.getOwnerColor().equals(this.getColor())) return true;
-            
-            // אם הקודקוד ריק - אפשר לעבור דרכו אם יש כביש שלי שמגיע אליו
+            if (v.isSettled() && v.getOwnerColor().equals(getColor())) return true;
             if (!v.isSettled()) {
                 for (Edge neighbor : v.getEdges()) {
-                    if (neighbor != edge && neighbor.hasRoad() && neighbor.getOwnerColor().equals(this.getColor())) return true;
+                    if (neighbor != edge && neighbor.hasRoad() && neighbor.getOwnerColor().equals(getColor())) return true;
                 }
             }
         }
@@ -546,18 +368,14 @@ public class AiPlayer extends Player {
     }
 
     private boolean isConnectedToMyRoads(Vertex vertex) {
-        for (Edge e : vertex.getEdges()) {
-            if (e.hasRoad() && e.getOwnerColor().equals(this.getColor())) return true;
-        }
+        for (Edge e : vertex.getEdges()) { if (e.hasRoad() && e.getOwnerColor().equals(getColor())) return true; }
         return false;
     }
 
     private boolean isRobberBlockingMe(GameEngine engine) {
         for (Hex hex : engine.getBoard().getAllHexes()) {
             if (hex.hasRobber()) {
-                for (Vertex v : hex.getVertices()) {
-                    if (v.isSettled() && v.getOwnerColor().equals(getColor())) return true;
-                }
+                for (Vertex v : hex.getVertices()) { if (v.isSettled() && v.getOwnerColor().equals(getColor())) return true; }
             }
         }
         return false;
@@ -572,5 +390,16 @@ public class AiPlayer extends Player {
             }
         }
         return best;
+    }
+
+    private ResourceType findNeededResource(boolean cityPhase) {
+        ResourceType best = null; int minCount = 100;
+        List<ResourceType> priorities = cityPhase ? Arrays.asList(ResourceType.ORE, ResourceType.WHEAT) :
+                                                   Arrays.asList(ResourceType.WOOD, ResourceType.BRICK, ResourceType.WHEAT, ResourceType.SHEEP);
+        for (ResourceType type : priorities) {
+            int count = getResources().getOrDefault(type, 0);
+            if (count < minCount) { minCount = count; best = type; }
+        }
+        return (best != null) ? best : ResourceType.WHEAT;
     }
 }
