@@ -57,16 +57,23 @@ public class AiPlayer extends Player {
 
     /**
      * עדיפות 1: טיפול במצבים קריטיים.
+     * [ניהול מצבי הכרעה] - הבוט בודק האם יש פעולה דחופה שעליו לבצע.
      */
     private boolean handleEmergency(GameEngine engine) {
-        if (!engine.getPlayersNeedingToDiscard().isEmpty()) return true;
+        // אם מישהו צריך לזרוק קלפים (בגלל 7), הבוט בודק אם הוא אחד מהם
+        if (!engine.getPlayersNeedingToDiscard().isEmpty()) {
+            // אם הבוט עצמו כבר זרק (הוא לא ברשימה), הוא פשוט מחכה לאחרים ולא עושה "פעולה"
+            return false; 
+        }
 
+        // טיפול בהזזת השודד
         if (engine.isRobberMode()) {
             moveRobberAi(engine);
             engine.setRobberMode(false);
             return true;
         }
 
+        // שימוש באביר אם השודד חוסם אותנו
         if (!hasPlayedDevCardThisTurn() && getDevCards().contains(DevCardType.KNIGHT) && isRobberBlockingMe(engine)) {
             engine.playDevCard(DevCardType.KNIGHT);
             return true;
@@ -120,9 +127,10 @@ public class AiPlayer extends Player {
     private String executeUpgrades(GameEngine engine) {
         if (!canBuildCity()) return null;
         
-        // הבוט ישדרג לעיר אם אין לו מטרה דחופה יותר או אם יש לו עודף משאבים
-        boolean surplusOre = hasResources(Map.of(ResourceType.ORE, 5, ResourceType.WHEAT, 4));
-        if (this.targetVertex == null || surplusOre) {
+        // הבוט ישדרג לעיר אם הוא הגיע לשלב מתקדם (3+ יישובים) או אם יש לו עודף משאבים
+        boolean shouldUpgrade = (getSettlementsBuilt() >= 3) || (this.targetVertex == null);
+        
+        if (shouldUpgrade) {
             Vertex upgradeSpot = findBestCityUpgradeSpot(engine);
             if (upgradeSpot != null && hasResources(GameEngine.CITY_COST)) {
                 String res = engine.attemptUpgradeCity(upgradeSpot);
@@ -136,12 +144,21 @@ public class AiPlayer extends Player {
      * עדיפות 4: מסחר ממוקד או קניית קלפי פיתוח.
      */
     private String executeEconomy(GameEngine engine) {
+        Map<ResourceType, Integer> neededCost = null;
+        
+        // אם יש יעד לבנייה - זהו סדר העדיפויות הראשון
         if (this.targetVertex != null) {
-            Map<ResourceType, Integer> cost = isConnectedToMyRoads(this.targetVertex) ? 
-                                              GameEngine.SETTLEMENT_COST : GameEngine.ROAD_COST;
-            
-            for (ResourceType missing : cost.keySet()) {
-                if (getResources().getOrDefault(missing, 0) < cost.get(missing)) {
+            neededCost = isConnectedToMyRoads(this.targetVertex) ? 
+                         GameEngine.SETTLEMENT_COST : GameEngine.ROAD_COST;
+        } 
+        // אם אין יעד אבל יש לנו לפחות 3 יישובים - ננסה לאסוף משאבים לעיר
+        else if (getSettlementsBuilt() >= 3 && canBuildCity()) {
+            neededCost = GameEngine.CITY_COST;
+        }
+
+        if (neededCost != null) {
+            for (ResourceType missing : neededCost.keySet()) {
+                if (getResources().getOrDefault(missing, 0) < neededCost.get(missing)) {
                     String tradeResult = tryTargetedTrade(engine, missing);
                     if (tradeResult != null) return tradeResult;
 
@@ -151,7 +168,8 @@ public class AiPlayer extends Player {
             }
         }
 
-        if (hasResources(GameEngine.DEV_CARD_COST)) {
+        // קניית קלפי פיתוח רק אם אין מטרה אחרת או אם יש המון משאבים
+        if (hasResources(GameEngine.DEV_CARD_COST) && (neededCost == null || getTotalResourcesCount() > 8)) {
             String res = engine.buyDevCard();
             if (res != null && (res.contains("BOUGHT") || res.contains("נקנה"))) return "קניתי קלף פיתוח.";
         }
