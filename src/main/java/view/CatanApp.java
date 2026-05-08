@@ -384,12 +384,17 @@ public class CatanApp extends Application {
         List<String> parts = new ArrayList<>();
         for (Map.Entry<DevCardType, Integer> entry : counts.entrySet()) {
             String name = "";
-            switch (entry.getKey()) {
-                case KNIGHT: name = "אביר"; break;
-                case VICTORY_POINT: name = "נקודת ניצחון"; break;
-                case ROAD_BUILDING: name = "בניית דרכים"; break;
-                case MONOPOLY: name = "מונופול"; break;
-                case YEAR_OF_PLENTY: name = "שנת שפע"; break;
+            DevCardType type = entry.getKey();
+            if (type == DevCardType.KNIGHT) {
+                name = "אביר";
+            } else if (type == DevCardType.VICTORY_POINT) {
+                name = "נקודת ניצחון";
+            } else if (type == DevCardType.ROAD_BUILDING) {
+                name = "בניית דרכים";
+            } else if (type == DevCardType.MONOPOLY) {
+                name = "מונופול";
+            } else if (type == DevCardType.YEAR_OF_PLENTY) {
+                name = "שנת שפע";
             }
             parts.add(name + (entry.getValue() > 1 ? " (x" + entry.getValue() + ")" : ""));
         }
@@ -465,15 +470,16 @@ public class CatanApp extends Application {
                     Map<ResourceType, Spinner<Integer>> spinners = new HashMap<>();
                     int row = 0;
                     for (ResourceType type : ResourceType.values()) {
-                        if (type == ResourceType.NONE) continue;
-                        int count = human.getResources().getOrDefault(type, 0);
-                        if (count > 0) {
-                            grid.add(new Label(type.toHebrew() + " (יש לך " + count + "):"), 0, row);
-                            Spinner<Integer> spinner = new Spinner<>(0, count, 0);
-                            spinner.setEditable(true);
-                            spinners.put(type, spinner);
-                            grid.add(spinner, 1, row);
-                            row++;
+                        if (type != ResourceType.NONE) {
+                            int count = human.getResources().getOrDefault(type, 0);
+                            if (count > 0) {
+                                grid.add(new Label(type.toHebrew() + " (יש לך " + count + "):"), 0, row);
+                                Spinner<Integer> spinner = new Spinner<>(0, count, 0);
+                                spinner.setEditable(true);
+                                spinners.put(type, spinner);
+                                grid.add(spinner, 1, row);
+                                row++;
+                            }
                         }
                     }
 
@@ -672,14 +678,12 @@ public class CatanApp extends Application {
                 double[] center = getHexCenter(hex); // מרכז המשושה
                 double hX = center[0]-80, hY = center[1]-65; // פינה שמאלית עליונה
                 int idx = hex.getVertices().indexOf(v); // איזה מ-6 הקודקודים זה
-                switch(idx) { // חישוב מיקום הפינה הספציפית לפי האינדקס
-                    case 0: return new double[]{hX+80, hY};
-                    case 1: return new double[]{hX+160, hY+32.5};
-                    case 2: return new double[]{hX+160, hY+97.5};
-                    case 3: return new double[]{hX+80, hY+130};
-                    case 4: return new double[]{hX, hY+97.5};
-                    case 5: return new double[]{hX, hY+32.5};
-                }
+                if (idx == 0) return new double[]{hX+80, hY};
+                if (idx == 1) return new double[]{hX+160, hY+32.5};
+                if (idx == 2) return new double[]{hX+160, hY+97.5};
+                if (idx == 3) return new double[]{hX+80, hY+130};
+                if (idx == 4) return new double[]{hX, hY+97.5};
+                if (idx == 5) return new double[]{hX, hY+32.5};
             }
         }
         return null; // לא נמצא
@@ -708,17 +712,12 @@ public class CatanApp extends Application {
 
         Optional<DevCardType> result = dialog.showAndWait();
         result.ifPresent(card -> {
-            switch (card) {
-                case KNIGHT:
-                case ROAD_BUILDING:
-                    lastAction = engine.playDevCard(card);
-                    break;
-                case YEAR_OF_PLENTY:
-                    handleYearOfPlenty(card);
-                    break;
-                case MONOPOLY:
-                    handleMonopoly(card);
-                    break;
+            if (card == DevCardType.KNIGHT || card == DevCardType.ROAD_BUILDING) {
+                lastAction = engine.playDevCard(card);
+            } else if (card == DevCardType.YEAR_OF_PLENTY) {
+                handleYearOfPlenty(card);
+            } else if (card == DevCardType.MONOPOLY) {
+                handleMonopoly(card);
             }
             refreshUI();
         });
@@ -817,15 +816,19 @@ public class CatanApp extends Application {
                     lastAction = "אין לך מספיק " + give.toHebrew() + "!";
                 } else {
                     boolean accepted = false;
-                    for (Player p : engine.getPlayers()) {
+                    List<Player> players = engine.getPlayers();
+                    int i = 0;
+                    while (i < players.size() && !accepted) {
+                        Player p = players.get(i);
                         if (p instanceof AiPlayer) {
                             AiPlayer bot = (AiPlayer) p;
                             if (bot.evaluateTradeOffer(Map.of(give, gAmt), Map.of(get, rAmt), human)) {
                                 engine.executeTrade(human, bot, Map.of(give, gAmt), Map.of(get, rAmt));
                                 lastAction = bot.getName() + " הסכים לעסקה!";
-                                accepted = true; break;
+                                accepted = true;
                             }
                         }
+                        i++;
                     }
                     if (!accepted) lastAction = "אף בוט לא מעוניין בעסקה הזו כרגע.";
                 }

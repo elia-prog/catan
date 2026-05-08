@@ -562,11 +562,15 @@ public class GameEngine {
         return "אין מספיק משאבים!";
     }
 
+    /**
+     * [ניהול מצבי הכרעה] - הפעלת קלף פיתוח.
+     * הפונקציה מבצעת בדיקות חוקיות (תור, גלגול קוביות, בעלות על קלף) ואז מפעילה את האפקט.
+     */
     public String playDevCard(DevCardType type, Object... params) {
         if (isGameOver) return "המשחק נגמר!";
         if (globalTurnCounter <= players.size()) return "חוק סיבוב ראשון: שימוש בקלפי פיתוח אסור!";
         
-        // חוק חדש: רק אביר מותר לפני גלגול הקוביות
+        // חוק: רק אביר מותר לפני גלגול הקוביות
         if (!hasRolled && type != DevCardType.KNIGHT) {
             return "רק קלף אביר ניתן להפעיל לפני גלגול הקוביות!";
         }
@@ -574,42 +578,43 @@ public class GameEngine {
         Player p = getCurrentPlayer();
         if (!p.getDevCards().contains(type)) return "אין לך את הקלף הזה לשימוש!";
         if (type != DevCardType.VICTORY_POINT && p.hasPlayedDevCardThisTurn()) return "ניתן להשתמש רק בקלף פיתוח אחד בתור!";
-        switch (type) {
-            case KNIGHT: 
-                p.removeDevCard(type);
-                p.addPlayedDevCard(type);
-                p.incrementKnightsPlayed();
-                isRobberMode = true;
-                updateLargestArmy();
-                p.setPlayedDevCardThisTurn(true);
-                return "השתמשת באביר.";
-            case ROAD_BUILDING: 
-                p.removeDevCard(type);
-                p.addPlayedDevCard(type);
-                roadBuildingRemaining = 2;
-                p.setPlayedDevCardThisTurn(true);
-                return "השתמשת בבניית כבישים.";
-            case YEAR_OF_PLENTY: 
-                p.removeDevCard(type);
-                p.addPlayedDevCard(type);
-                p.addResource((ResourceType) params[0], 1);
-                p.addResource((ResourceType) params[1], 1);
-                p.setPlayedDevCardThisTurn(true);
-                return "השתמשת בשפע!";
-            case MONOPOLY: 
-                ResourceType res = (ResourceType) params[0];
-                p.removeDevCard(type);
-                p.addPlayedDevCard(type);
-                int totalStolen = 0;
-                for (Player other : players) {
-                    if (other != p) {
-                        int count = other.getResources().getOrDefault(res, 0);
-                        other.removeResource(res, count); totalStolen += count;
-                    }
+
+        if (type == DevCardType.KNIGHT) {
+            p.removeDevCard(type);
+            p.addPlayedDevCard(type);
+            p.incrementKnightsPlayed();
+            isRobberMode = true;
+            updateLargestArmy();
+            p.setPlayedDevCardThisTurn(true);
+            return "השתמשת באביר.";
+        } else if (type == DevCardType.ROAD_BUILDING) {
+            p.removeDevCard(type);
+            p.addPlayedDevCard(type);
+            roadBuildingRemaining = 2;
+            p.setPlayedDevCardThisTurn(true);
+            return "השתמשת בבניית כבישים.";
+        } else if (type == DevCardType.YEAR_OF_PLENTY) {
+            p.removeDevCard(type);
+            p.addPlayedDevCard(type);
+            p.addResource((ResourceType) params[0], 1);
+            p.addResource((ResourceType) params[1], 1);
+            p.setPlayedDevCardThisTurn(true);
+            return "השתמשת בשפע!";
+        } else if (type == DevCardType.MONOPOLY) {
+            ResourceType res = (ResourceType) params[0];
+            p.removeDevCard(type);
+            p.addPlayedDevCard(type);
+            int totalStolen = 0;
+            for (Player other : players) {
+                if (other != p) {
+                    int count = other.getResources().getOrDefault(res, 0);
+                    other.removeResource(res, count); totalStolen += count;
                 }
-                p.addResource(res, totalStolen); p.setPlayedDevCardThisTurn(true);
-                return "השתמשת במונופול!";
+            }
+            p.addResource(res, totalStolen); p.setPlayedDevCardThisTurn(true);
+            return "השתמשת במונופול!";
         }
+
         return "סוג קלף לא ידוע.";
     }
 

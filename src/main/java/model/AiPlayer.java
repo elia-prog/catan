@@ -86,28 +86,27 @@ public class AiPlayer extends Player {
 
     /**
      * עדיפות 2: בניית יישוב ביעד או סלילת הדרך אליו.
+     * [ניהול מצבי הכרעה] - הבוט מחליט האם לבנות מבנה או להמשיך לסלול דרך.
      */
     private String executeTargetBuild(GameEngine engine) {
         if (this.targetVertex == null) return null;
 
-        if (isConnectedToMyRoads(this.targetVertex) && canBuildSettlement()) {
-            if (hasResources(GameEngine.SETTLEMENT_COST)) {
-                String res = engine.attemptBuildSettlement(this.targetVertex);
-                if (res != null && res.contains("SUCCESS")) {
-                    this.targetVertex = null;
-                    return "בניתי יישוב במיקום אסטרטגי.";
-                }
+        // ניסיון בניית יישוב אם הבוט כבר הגיע ליעד
+        if (isConnectedToMyRoads(this.targetVertex) && canBuildSettlement() && hasResources(GameEngine.SETTLEMENT_COST)) {
+            String res = engine.attemptBuildSettlement(this.targetVertex);
+            if (res != null && res.contains("SUCCESS")) {
+                this.targetVertex = null;
+                return "בניתי יישוב במיקום אסטרטגי.";
             }
         }
 
+        // ניסיון סלילת דרך לכיוון היעד
         if (canBuildRoad()) {
             Edge road = findRoadTowardsTarget(engine, this.targetVertex);
-            if (road != null) {
-                boolean freeRoads = engine.getRoadBuildingRemaining() > 0;
-                if (freeRoads || hasResources(GameEngine.ROAD_COST)) {
-                    String res = engine.attemptBuildRoad(road);
-                    if (res != null && res.contains("SUCCESS")) return "בניתי דרך לכיוון המטרה האסטרטגית.";
-                }
+            boolean canAfford = hasResources(GameEngine.ROAD_COST) || engine.getRoadBuildingRemaining() > 0;
+            if (road != null && canAfford) {
+                String res = engine.attemptBuildRoad(road);
+                if (res != null && res.contains("SUCCESS")) return "בניתי דרך לכיוון המטרה האסטרטגית.";
             }
         }
 
@@ -116,11 +115,14 @@ public class AiPlayer extends Player {
 
     /**
      * עדיפות 3: שדרוג יישובים קיימים לערים.
+     * [אופטימיזציה] - שדרוג המקום שמפיק הכי הרבה משאבים.
      */
     private String executeUpgrades(GameEngine engine) {
         if (!canBuildCity()) return null;
         
-        if (this.targetVertex == null || hasResources(Map.of(ResourceType.ORE, 5, ResourceType.WHEAT, 4))) {
+        // הבוט ישדרג לעיר אם אין לו מטרה דחופה יותר או אם יש לו עודף משאבים
+        boolean surplusOre = hasResources(Map.of(ResourceType.ORE, 5, ResourceType.WHEAT, 4));
+        if (this.targetVertex == null || surplusOre) {
             Vertex upgradeSpot = findBestCityUpgradeSpot(engine);
             if (upgradeSpot != null && hasResources(GameEngine.CITY_COST)) {
                 String res = engine.attemptUpgradeCity(upgradeSpot);
@@ -159,40 +161,54 @@ public class AiPlayer extends Player {
 
     private String tryTargetedTrade(GameEngine engine, ResourceType needed) {
         ResourceType surplus = findSurplusResource(needed);
-        if (surplus == null) return null;
+        String tradeStatus = null;
+        if (surplus != null) {
+            Map<ResourceType, Integer> offer = Map.of(surplus, 1);
+            Map<ResourceType, Integer> request = Map.of(needed, 1);
 
-        Map<ResourceType, Integer> offer = Map.of(surplus, 1);
-        Map<ResourceType, Integer> request = Map.of(needed, 1);
-
-        for (Player other : engine.getPlayers()) {
-            if (other == this) continue;
-            if (other.getResources().getOrDefault(needed, 0) >= 1) {
-                if (other instanceof AiPlayer) {
-                    if (((AiPlayer) other).evaluateTradeOffer(offer, request, this)) {
-                        engine.executeTrade(this, (AiPlayer)other, offer, request);
-                        return "מסחר בין בוטים: " + getName() + " נתן " + surplus.toHebrew() + " ל-" + other.getName() + " בתמורה ל-" + needed.toHebrew();
-                    }
-                } else {
-                    String key = surplus.name() + ":1:" + needed.name() + ":1";
-                    if (rejectedTrades.getOrDefault(key, -1) != engine.getTurnCounter()) {
-                        return "TRADE_OFFER:" + getName() + ":" + surplus.name() + ":" + needed.name();
+            List<Player> players = engine.getPlayers();
+            int i = 0;
+            while (i < players.size() && tradeStatus == null) {
+                Player other = players.get(i);
+                if (other != this) {
+                    if (other.getResources().getOrDefault(needed, 0) >= 1) {
+                        if (other instanceof AiPlayer) {
+                            if (((AiPlayer) other).evaluateTradeOffer(offer, request, this)) {
+                                engine.executeTrade(this, (AiPlayer)other, offer, request);
+                                tradeStatus = "מסחר בין בוטים: " + getName() + " נתן " + surplus.toHebrew() + " ל-" + other.getName() + " בתמורה ל-" + needed.toHebrew();
+                            }
+                        } else {
+                            String key = surplus.name() + ":1:" + needed.name() + ":1";
+                            if (rejectedTrades.getOrDefault(key, -1) != engine.getTurnCounter()) {
+                                tradeStatus = "TRADE_OFFER:" + getName() + ":" + surplus.name() + ":" + needed.name();
+                            }
+                        }
                     }
                 }
+                i++;
             }
         }
-        return null;
+        return tradeStatus;
     }
 
     private boolean tryTargetedBankTrade(GameEngine engine, ResourceType needed) {
-        for (ResourceType surplus : ResourceType.values()) {
-            if (surplus == ResourceType.NONE || surplus == needed) continue;
-            int ratio = engine.getTradeRatio(this, surplus);
-            if (getResources().getOrDefault(surplus, 0) >= ratio) {
-                String res = engine.executeBankTrade(this, surplus, needed);
-                return res.startsWith("SUCCESS");
+        boolean success = false;
+        ResourceType[] types = ResourceType.values();
+        int i = 0;
+        while (i < types.length && !success) {
+            ResourceType surplus = types[i];
+            if (surplus != ResourceType.NONE && surplus != needed) {
+                int ratio = engine.getTradeRatio(this, surplus);
+                if (getResources().getOrDefault(surplus, 0) >= ratio) {
+                    String res = engine.executeBankTrade(this, surplus, needed);
+                    if (res.startsWith("SUCCESS")) {
+                        success = true;
+                    }
+                }
             }
+            i++;
         }
-        return false;
+        return success;
     }
 
     private ResourceType findSurplusResource(ResourceType exclude) {
@@ -251,12 +267,16 @@ public class AiPlayer extends Player {
         int score = 0;
         for (Hex hex : v.getAdjacentHexes()) {
             int num = hex.getNumberToken();
-            switch (num) {
-                case 6: case 8:  score += 5; break;
-                case 5: case 9:  score += 4; break;
-                case 4: case 10: score += 3; break;
-                case 3: case 11: score += 2; break;
-                case 2: case 12: score += 1; break;
+            if (num == 6 || num == 8) {
+                score += 5;
+            } else if (num == 5 || num == 9) {
+                score += 4;
+            } else if (num == 4 || num == 10) {
+                score += 3;
+            } else if (num == 3 || num == 11) {
+                score += 2;
+            } else if (num == 2 || num == 12) {
+                score += 1;
             }
         }
         return score;
@@ -266,7 +286,15 @@ public class AiPlayer extends Player {
         Vertex bestSpot = findBestSetupSpot(engine);
         if (bestSpot != null) {
             Edge bestRoad = null;
-            for (Edge e : bestSpot.getEdges()) { if (!e.hasRoad()) { bestRoad = e; break; } }
+            List<Edge> edges = bestSpot.getEdges();
+            int i = 0;
+            while (i < edges.size() && bestRoad == null) {
+                Edge e = edges.get(i);
+                if (!e.hasRoad()) {
+                    bestRoad = e;
+                }
+                i++;
+            }
             if (bestRoad != null) {
                 engine.handleSetupInteraction(bestSpot, null);
                 engine.handleSetupInteraction(null, bestRoad);
@@ -322,29 +350,67 @@ public class AiPlayer extends Player {
                 distances.put(v, 0.0); pq.add(new Node(v, 0.0));
             } else { distances.put(v, Double.MAX_VALUE); }
         }
-        while (!pq.isEmpty()) {
+        
+        boolean targetFound = false;
+        while (!pq.isEmpty() && !targetFound) {
             Node current = pq.poll(); Vertex u = current.vertex;
-            if (u == target) break;
-            if (current.dist > distances.get(u)) continue;
-            for (Edge e : u.getEdges()) {
-                if (engine.getBoard().isBuildableEdge(e) && (!e.hasRoad() || e.getOwnerColor().equals(getColor()))) {
-                    Vertex v = null;
-                    for (Vertex neighbor : e.getVertices()) if (neighbor != u) v = neighbor;
-                    if (v == null || (v.isSettled() && !v.getOwnerColor().equals(getColor()))) continue;
-                    double newDist = distances.get(u) + 1.0;
-                    if (newDist < distances.get(v)) {
-                        distances.put(v, newDist); edgeTo.put(v, e); parentVertex.put(v, u);
-                        pq.add(new Node(v, newDist));
+            if (u == target) {
+                targetFound = true;
+            } else {
+                if (current.dist <= distances.get(u)) {
+                    for (Edge e : u.getEdges()) {
+                        if (engine.getBoard().isBuildableEdge(e) && (!e.hasRoad() || e.getOwnerColor().equals(getColor()))) {
+                            Vertex v = null;
+                            for (Vertex neighbor : e.getVertices()) if (neighbor != u) v = neighbor;
+                            if (v != null && (!v.isSettled() || v.getOwnerColor().equals(getColor()))) {
+                                double edgeWeight = calculateEdgeWeight(e, engine);
+                                double newDist = distances.get(u) + edgeWeight;
+                                if (newDist < distances.get(v)) {
+                                    distances.put(v, newDist); edgeTo.put(v, e); parentVertex.put(v, u);
+                                    pq.add(new Node(v, newDist));
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        if (!edgeTo.containsKey(target)) return null;
-        List<Edge> fullPath = new ArrayList<>(); Vertex curr = target;
-        while (edgeTo.containsKey(curr)) {
-            fullPath.add(0, edgeTo.get(curr)); curr = parentVertex.get(curr);
+        
+        List<Edge> fullPath = null;
+        if (edgeTo.containsKey(target)) {
+            fullPath = new ArrayList<>();
+            Vertex curr = target;
+            while (edgeTo.containsKey(curr)) {
+                fullPath.add(0, edgeTo.get(curr)); curr = parentVertex.get(curr);
+            }
         }
         return fullPath;
+    }
+
+    /**
+     * [יעילות: O(1)] - חישוב "מחיר" אסטרטגי לקשת בגרף.
+     * ככל שהמשקל נמוך יותר, הבוט יעדיף את הדרך הזו.
+     */
+    private double calculateEdgeWeight(Edge e, GameEngine engine) {
+        double weight = 1.0; // משקל בסיס
+
+        // אם כבר יש לנו כביש שם, המשקל הוא אפסי (אנחנו כבר שם)
+        if (e.hasRoad() && e.getOwnerColor().equals(getColor())) return 0.0;
+
+        for (Vertex v : e.getVertices()) {
+            for (Hex h : v.getAdjacentHexes()) {
+                // העדפה למשאבים חזקים (6, 8) - מוריד את המשקל
+                if (h.getNumberToken() == 6 || h.getNumberToken() == 8) weight -= 0.1;
+                
+                // התרחקות מהמדבר - מעלה את המשקל
+                if (h.getType() == TerrainType.DESERT) weight += 0.2;
+                
+                // התרחקות מהמים (קצוות הלוח) - מעלה את המשקל
+                if (h.getType() == TerrainType.WATER_TILE) weight += 0.1;
+            }
+        }
+
+        return Math.max(0.1, weight); // מוודא שהמשקל תמיד חיובי
     }
 
     private Edge findRoadTowardsTarget(GameEngine engine, Vertex target) {

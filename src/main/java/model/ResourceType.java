@@ -17,13 +17,11 @@ public enum ResourceType {
      * @return מחרוזת המייצגת את שם המשאב בעברית.
      */
     public String toHebrew() {
-        switch (this) { // בדיקת סוג המשאב הנוכחי
-            case WOOD: return "עץ"; // החזרת השם עבור עץ
-            case BRICK: return "לבנה"; // החזרת השם עבור לבנה
-            case SHEEP: return "כבשה"; // החזרת השם עבור כבשה
-            case WHEAT: return "חיטה"; // החזרת השם עבור חיטה
-            case ORE: return "עפרה"; // החזרת השם עבור עפרה
-            default: return "ללא"; // החזרת "ללא" עבור כל מקרה אחר (כמו NONE)
-        }
+        if (this == WOOD) return "עץ";
+        if (this == BRICK) return "לבנה";
+        if (this == SHEEP) return "כבשה";
+        if (this == WHEAT) return "חיטה";
+        if (this == ORE) return "עפרה";
+        return "ללא";
     }
 }
