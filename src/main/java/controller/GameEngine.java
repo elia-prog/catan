@@ -196,6 +196,12 @@ public class GameEngine {
     public boolean isGameOver() { return isGameOver; }
     public boolean isAutonomousMode() { return autonomousMode; }
 
+    private List<Map<Player, Map<ResourceType, Integer>>> distributionHistory = new ArrayList<>();
+
+    public List<Map<Player, Map<ResourceType, Integer>>> getDistributionHistory() {
+        return distributionHistory;
+    }
+
     /**
      * [יעילות: O(H + P)] - גלגול קוביות וחלוקת משאבים.
      */
@@ -269,6 +275,9 @@ public class GameEngine {
         if (gains.isEmpty()) {
             lastDistributionResult = "לא הופקו משאבים.";
         } else {
+            distributionHistory.add(new HashMap<>(gains));
+            if (distributionHistory.size() > 20) distributionHistory.remove(0); // שמירת היסטוריה מוגבלת לביצועים
+            
             gains.forEach((p, resMap) -> {
                 summary.append(p.getName()).append(" קיבל: ");
                 resMap.forEach((type, amt) -> summary.append(amt).append(" ").append(type.toHebrew()).append(", "));

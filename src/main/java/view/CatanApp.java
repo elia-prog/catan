@@ -24,269 +24,269 @@ import java.util.*; // מייבא כלי עזר של ג'אווה כמו רשימ
  * מחלקה זו היא הלב של הממשק הגרפי.
  * היא יוצרת את החלון, מציירת את הלוח ומקשרת בין הפעולות של השחקן למנוע המשחק.
  */
-public class CatanApp extends Application {
+public class CatanApp extends Application { // הגדרת המחלקה הראשית של האפליקציה
 
     // הגדרות גודל ומיקום קבועות לציור המשושים על המסך
-    private static final double STD_W = 160.0; // רוחב סטנדרטי של משושה
-    private static final double STD_H = 130.0; // גובה סטנדרטי של משושה
-    private static final double X_STEP = 154.0; // המרחק האופקי בין מרכזי משושים
-    private static final double Y_STEP = 92.0; // המרחק האנכי בין שורות משושים
-    private static final double START_X = 55.0; // נקודת התחלה לציור בציר ה-X
-    private static final double START_Y = 90.0; // נקודת התחלה לציור בציר ה-Y
-    private static final double VERT_OFFSET = 20.0; // היסט לציור יישובים מעל הקודקוד כדי שייראו טוב
+    private static final double STD_W = 160.0; // רוחב סטנדרטי של משושה בפיקסלים
+    private static final double STD_H = 130.0; // גובה סטנדרטי של משושה בפיקסלים
+    private static final double X_STEP = 154.0; // המרחק האופקי בין מרכזי משושים צמודים
+    private static final double Y_STEP = 92.0; // המרחק האנכי בין שורות משושים עוקבות
+    private static final double START_X = 55.0; // נקודת התחלה בציר ה-X לציור הלוח
+    private static final double START_Y = 90.0; // נקודת התחלה בציר ה-Y לציור הלוח
+    private static final double VERT_OFFSET = 20.0; // היסט גובה לציור מבנים מעל הקודקודים
 
-    private GameEngine engine; // מנוע המשחק שמכיל את הלוגיקה
-    private Canvas canvas; // משטח הציור שעליו נצייר את הלוח
-    private Label statusLabel; // תווית טקסט להצגת המצב הנוכחי (תור מי, איזה שלב)
-    private VBox statsPanel; // פאנל צדדי אנכי להצגת המשאבים של השחקנים
-    private Button rollButton, endTurnButton, tradeButton, buyDevButton, useDevCardButton; // כפתורי הפעולה בממשק
-    private String lastAction = "ברוכים הבאים לקטאן!"; // הודעה אחרונה להצגה בסרגל העליון
+    private GameEngine engine; // משתנה השומר את מופע מנוע המשחק
+    private Canvas canvas; // רכיב הקנבס עליו מתבצע הציור הגרפי
+    private Label statusLabel; // תווית טקסט להצגת המצב הלוגי של המשחק
+    private VBox statsPanel; // פאנל צדדי המרכז את נתוני השחקנים
+    private Button rollButton, endTurnButton, tradeButton, buyDevButton, useDevCardButton; // הגדרת כפתורי השליטה בממשק
+    private String lastAction = "ברוכים הבאים לקטאן!"; // מחרוזת השומרת את ההודעה האחרונה למשתמש
 
     /**
      * [יעילות: O(1)] - פונקציית ההתחלה של האפליקציה - יוצרת את מסך הפתיחה
      */
-    @Override
-    public void start(Stage primaryStage) {
-        VBox startScreen = new VBox(30); // יצירת פריסה אנכי עם רווח של 30 פיקסלים
-        startScreen.setAlignment(Pos.CENTER); // יישור למרכז
-        startScreen.setStyle("-fx-background-color: #2c3e50;"); // הגדרת צבע רקע כחול כהה
+    @Override // דריסה של מתודת start מ-Application
+    public void start(Stage primaryStage) { // מתודת הכניסה של JavaFX
+        VBox startScreen = new VBox(30); // יצירת מכולה אנכית עם ריווח בין איברים
+        startScreen.setAlignment(Pos.CENTER); // הגדרת יישור האיברים למרכז
+        startScreen.setStyle("-fx-background-color: #2c3e50;"); // קביעת צבע רקע כהה
 
-        Label title = new Label("קטאן - המהדורה המאוזנת"); // כותרת המשחק
-        title.setTextFill(Color.WHITE); // צבע טקסט לבן
-        title.setFont(Font.font("Arial", FontWeight.BOLD, 36)); // גופן גדול ומודגש
+        Label title = new Label("קטאן - המהדורה המאוזנת"); // יצירת כותרת המשחק
+        title.setTextFill(Color.WHITE); // קביעת צבע טקסט לבן
+        title.setFont(Font.font("Arial", FontWeight.BOLD, 36)); // קביעת גופן גדול ומודגש
 
         // כפתורים לבחירת מצב משחק
-        Button playBtn = new Button("אני רוצה לשחק נגד בוטים"); // כפתור למשחק רגיל
-        Button autoBtn = new Button("מצב אוטונומי (בוטים נגד עצמם)"); // כפתור לסימולציה
+        Button playBtn = new Button("אני רוצה לשחק נגד בוטים"); // כפתור למשחק רגיל (אדם נגד מחשב)
+        Button autoBtn = new Button("מצב אוטונומי (בוטים נגד עצמם)"); // כפתור לצפייה בסימולציה
         
-        String btnStyle = "-fx-font-size: 20px; -fx-padding: 15 30; -fx-pref-width: 400; -fx-cursor: hand;";
-        playBtn.setStyle(btnStyle + "-fx-base: #2ecc71;"); // סגנון ירוק לכפתור רגיל
-        autoBtn.setStyle(btnStyle + "-fx-base: #e67e22;"); // סגנון כתום לכפתור אוטונומי
+        String btnStyle = "-fx-font-size: 20px; -fx-padding: 15 30; -fx-pref-width: 400; -fx-cursor: hand;"; // הגדרת סגנון עיצובי לכפתורים
+        playBtn.setStyle(btnStyle + "-fx-base: #2ecc71;"); // הוספת צבע ירוק לכפתור המשחק
+        autoBtn.setStyle(btnStyle + "-fx-base: #e67e22;"); // הוספת צבע כתום לכפתור האוטונומי
 
         // הגדרת פעולות ללחיצה על הכפתורים
-        playBtn.setOnAction(e -> initGame(primaryStage, false)); // התחלת משחק רגיל
-        autoBtn.setOnAction(e -> initGame(primaryStage, true)); // התחלת משחק אוטונומי
+        playBtn.setOnAction(e -> initGame(primaryStage, false)); // הפעלת המשחק במצב רגיל בלחיצה
+        autoBtn.setOnAction(e -> initGame(primaryStage, true)); // הפעלת המשחק במצב אוטונומי בלחיצה
 
-        startScreen.getChildren().addAll(title, playBtn, autoBtn); // הוספת האלמנטים למסך הפתיחה
+        startScreen.getChildren().addAll(title, playBtn, autoBtn); // הוספת הכותרת והכפתורים למסך הפתיחה
         
-        primaryStage.setScene(new Scene(startScreen, 1180, 660)); // הגדרת גודל החלון
-        primaryStage.setTitle("קטאן - בחירת מצב"); // כותרת החלון
-        primaryStage.show(); // הצגת החלון
+        primaryStage.setScene(new Scene(startScreen, 1180, 660)); // יצירת הסצנה והגדרת גודלה
+        primaryStage.setTitle("קטאן - בחירת מצב"); // קביעת כותרת החלון הראשי
+        primaryStage.show(); // הצגת החלון על המסך
     }
 
     /**
      * [יעילות: O(1)] - אתחול מסך המשחק האמיתי אחרי בחירת המצב
      */
-    private void initGame(Stage stage, boolean isAutonomous) {
-        engine = new GameEngine(isAutonomous); // יצירת מנוע המשחק בהתאם לבחירה
-        canvas = new Canvas(900, 620); // יצירת משטח הציור ללוח
+    private void initGame(Stage stage, boolean isAutonomous) { // מתודת אתחול המשחק
+        engine = new GameEngine(isAutonomous); // יצירת מופע חדש של המנוע בהתאם למצב שנבחר
+        canvas = new Canvas(900, 620); // יצירת קנבס בגודל מוגדר לציור הלוח
         
-        HBox controls = new HBox(15); // יצירת שורת כפתורים בתחתית
-        controls.setPadding(new Insets(10)); // מרווח פנימי
-        controls.setAlignment(Pos.CENTER); // יישור למרכז
-        controls.setStyle("-fx-background-color: #2c3e50;"); // צבע רקע תואם
+        HBox controls = new HBox(15); // יצירת שורת כפתורים (HBox) עם ריווח ביניהם
+        controls.setPadding(new Insets(10)); // הוספת שוליים פנימיים לשורת הכפתורים
+        controls.setAlignment(Pos.CENTER); // יישור הכפתורים למרכז השורה
+        controls.setStyle("-fx-background-color: #2c3e50;"); // קביעת צבע רקע תואם לממשק
 
-        rollButton = new Button("הטל קוביות 🎲"); // יצירת כפתור קוביות
-        rollButton.setOnAction(e -> { // פעולה בעת לחיצה
-            lastAction = engine.rollDice(); // הטלת קוביות במנוע
-            refreshUI(); // עדכון התצוגה
+        rollButton = new Button("הטל קוביות 🎲"); // יצירת כפתור להטלת הקוביות
+        rollButton.setOnAction(e -> { // הגדרת פעולת הלחיצה על הקוביות
+            lastAction = engine.rollDice(); // קריאה לפעולת ההטלה במנוע ושמירת התוצאה
+            refreshUI(); // עדכון הממשק הגרפי להצגת המשאבים החדשים
         });
 
-        endTurnButton = new Button("סיום תור 🏁"); // יצירת כפתור סיום תור
-        endTurnButton.setOnAction(e -> { // פעולה בעת לחיצה
-            String res = engine.endTurn(); // סיום תור במנוע
-            if (res.equals("SUCCESS")) { // אם הצליח
-                Player p = engine.getCurrentPlayer(); // קבלת השחקן הבא
-                lastAction = p.getName().equals("אתה") ? "תורך!" : "התור של " + p.getName();
+        endTurnButton = new Button("סיום תור 🏁"); // יצירת כפתור לסיום התור הנוכחי
+        endTurnButton.setOnAction(e -> { // הגדרת פעולת סיום התור
+            String res = engine.endTurn(); // ניסיון לסיים את התור במנוע
+            if (res.equals("SUCCESS")) { // אם הפעולה הצליחה
+                Player p = engine.getCurrentPlayer(); // קבלת השחקן שהתור עבר אליו
+                lastAction = p.getName().equals("אתה") ? "תורך!" : "התור של " + p.getName(); // עדכון הודעת הסטטוס
             } else {
-                lastAction = res; // הצגת סיבת הכישלון
+                lastAction = res; // הצגת סיבת השגיאה אם התור לא הסתיים
             }
-            refreshUI(); // עדכון התצוגה
+            refreshUI(); // רענון הממשק
         });
 
-        tradeButton = new Button("מסחר 🤝"); // יצירת כפתור מסחר
-        tradeButton.setOnAction(e -> showTradeDialog()); // הצגת חלון הסבר על מסחר
+        tradeButton = new Button("מסחר 🤝"); // יצירת כפתור לפתיחת ממשק המסחר
+        tradeButton.setOnAction(e -> showTradeDialog()); // הצגת חלון הדיאלוג של המסחר
 
-        buyDevButton = new Button("קנה קלף פיתוח 🃏"); // יצירת כפתור קלפי פיתוח
-        buyDevButton.setOnAction(e -> { // פעולה בעת לחיצה
-            lastAction = engine.buyDevCard(); // קנייה במנוע
-            refreshUI(); // עדכון התצוגה
+        buyDevButton = new Button("קנה קלף פיתוח 🃏"); // יצירת כפתור לקניית קלף פיתוח
+        buyDevButton.setOnAction(e -> { // הגדרת פעולת הקנייה
+            lastAction = engine.buyDevCard(); // ביצוע הקנייה במנוע ועדכון הסטטוס
+            refreshUI(); // רענון הממשק להצגת הקלף החדש
         });
 
-        useDevCardButton = new Button("השתמש בקלף פיתוח ✨"); // יצירת כפתור שימוש בקלף
-        useDevCardButton.setOnAction(e -> showPlayDevCardDialog());
+        useDevCardButton = new Button("השתמש בקלף פיתוח ✨"); // יצירת כפתור להפעלת קלף פיתוח קיים
+        useDevCardButton.setOnAction(e -> showPlayDevCardDialog()); // הצגת חלון בחירת הקלף להפעלה
 
-        statusLabel = new Label("המשחק מוכן"); // תווית הסטטוס
-        statusLabel.setTextFill(Color.WHITE); // צבע לבן
+        statusLabel = new Label("המשחק מוכן"); // יצירת תווית להצגת הודעות מערכת
+        statusLabel.setTextFill(Color.WHITE); // צבע טקסט לבן לתווית הסטטוס
 
-        controls.getChildren().addAll(rollButton, endTurnButton, tradeButton, buyDevButton, useDevCardButton, statusLabel); // הוספת כל הפקדים לשורה
+        controls.getChildren().addAll(rollButton, endTurnButton, tradeButton, buyDevButton, useDevCardButton, statusLabel); // הוספת הכפתורים והתווית לשורת הבקרה
         
-        canvas.setOnMouseClicked(e -> handleMouseClick(e.getX(), e.getY())); // הגדרת טיפול בלחיצות עכבר על הלוח
+        canvas.setOnMouseClicked(e -> handleMouseClick(e.getX(), e.getY())); // רישום מאזין ללחיצות עכבר על גבי הקנבס
 
-        VBox rightPanel = new VBox(10); // יצירת פאנל צדדי לימין
-        rightPanel.setPadding(new Insets(10)); // מרווח פנימי
-        rightPanel.setPrefWidth(280); // רוחב קבוע
-        rightPanel.setStyle("-fx-background-color: #34495e;"); // צבע רקע אפור-כחול
+        VBox rightPanel = new VBox(10); // יצירת הפאנל הימני המציג סטטיסטיקות
+        rightPanel.setPadding(new Insets(10)); // הגדרת שוליים פנימיים לפאנל
+        rightPanel.setPrefWidth(280); // קביעת רוחב קבוע לפאנל הסטטיסטיקות
+        rightPanel.setStyle("-fx-background-color: #34495e;"); // צבע רקע אפור-כחול כהה
 
-        statsPanel = new VBox(10); // פאנל פנימי לנתוני שחקנים
-        rightPanel.getChildren().addAll(statsPanel, new Separator()); // הוספת הפאנל וקו מפריד
+        statsPanel = new VBox(10); // מכולה פנימית לרשימת השחקנים
+        rightPanel.getChildren().addAll(statsPanel, new Separator()); // הוספת רשימת השחקנים וקו מפריד תחתיה
 
-        BorderPane root = new BorderPane(); // פריסה ראשית של החלון
-        root.setCenter(canvas); // הלוח במרכז
-        root.setBottom(controls); // הכפתורים בתחתית
-        root.setRight(rightPanel); // הנתונים בימין
+        BorderPane root = new BorderPane(); // פריסה ראשית של חלון המשחק
+        root.setCenter(canvas); // מיקום הקנבס במרכז החלון
+        root.setBottom(controls); // מיקום שורת הבקרה בתחתית החלון
+        root.setRight(rightPanel); // מיקום פאנל הסטטיסטיקות בצד ימין
 
-        stage.setScene(new Scene(root, 1180, 660)); // הגדרת הסצנה החדשה
-        stage.show(); // הצגה
+        stage.setScene(new Scene(root, 1180, 660)); // עדכון הסצנה של החלון לפריסה החדשה
+        stage.show(); // הצגת חלון המשחק המעודכן
 
-        refreshUI(); // עדכון ראשוני של כל האלמנטים הגרפיים
+        refreshUI(); // ביצוע רענון ראשוני להצגת מצב הפתיחה
     }
 
     /**
      * [יעילות: O(H+V+E)] - עדכון כל רכיבי המסך
      */
-    private void refreshUI() {
-        redraw(); // ציור מחדש של הלוח, הכבישים והמבנים
-        updateStatsPanel(); // עדכון רשימת המשאבים בצד
-        updateControls(); // עדכון מצב הכפתורים (פעיל/נעול)
+    private void refreshUI() { // מתודת רענון הממשק
+        redraw(); // קריאה לציור מחדש של הלוח והאלמנטים הגרפיים
+        updateStatsPanel(); // עדכון נתוני השחקנים והמשאבים
+        updateControls(); // עדכון מצב הכפתורים (פעיל/מושבת)
 
-        checkDiscardNeeded();
+        checkDiscardNeeded(); // בדיקה האם יש צורך בדיאלוג זריקת קלפים
 
         // אם התור הנוכחי הוא של בוט - מפעילים אותו אוטומטית
-        if (!engine.isGameOver() && engine.getCurrentPlayer() instanceof AiPlayer) {
-            triggerAiStep(); // צעד אחד של הבוט
+        if (!engine.isGameOver() && engine.getCurrentPlayer() instanceof AiPlayer) { // בדיקה האם תור הבוט
+            triggerAiStep(); // הפעלת מהלך אוטונומי של הבוט
         }
     }
 
     /**
      * [יעילות: O(H+V+E)] - הפונקציה המרכזית שמציירת את הלוח על הקנבס
      */
-    private void redraw() {
-        GraphicsContext gc = canvas.getGraphicsContext2D(); // קבלת ה"מכחול"
+    private void redraw() { // מתודת הציור המרכזית
+        GraphicsContext gc = canvas.getGraphicsContext2D(); // קבלת אובייקט הציור של הקנבס
         
         // 1. ציור הרקע (אריחי מים)
-        for (int x = 0; x < canvas.getWidth(); x += 100) {
-            for (int y = 0; y < canvas.getHeight(); y += 100) {
-                drawSprite(gc, "WATER_TILE", x, y, 100, 100); // ציור תמונת מים
+        for (int x = 0; x < canvas.getWidth(); x += 100) { // מעבר על רוחב הקנבס
+            for (int y = 0; y < canvas.getHeight(); y += 100) { // מעבר על גובה הקנבס
+                drawSprite(gc, "WATER_TILE", x, y, 100, 100); // ציור משבצת מים בגודל 100x100
             }
         }
 
         // 2. ציור המשושים (אדמה)
-        for (Hex hex : engine.getBoard().getAllHexes()) {
-            double[] center = getHexCenter(hex); // חישוב מיקום המרכז על המסך
-            double hX = center[0] - 80, hY = center[1] - 65; // חישוב פינה שמאלית עליונה לציור
+        for (Hex hex : engine.getBoard().getAllHexes()) { // מעבר על כל המשושים בלוח
+            double[] center = getHexCenter(hex); // חישוב מרכז המשושה על המסך
+            double hX = center[0] - 80, hY = center[1] - 65; // חישוב הפינה העליונה לציור המשושה
             
-            drawSprite(gc, "HEX_" + hex.getType().name(), hX, hY, 160, 130); // ציור תמונת השטח (יער, הר וכו')
+            drawSprite(gc, "HEX_" + hex.getType().name(), hX, hY, 160, 130); // ציור גרפיקת המשושה לפי סוג השטח
             
-            if (hex.getNumberToken() != 0) { // אם למשושה יש מספר (לא מדבר)
-                drawSprite(gc, "NUM_" + hex.getNumberToken(), hX + 57.5, hY + 24, 45, 42); // ציור אסימון המספר
+            if (hex.getNumberToken() != 0) { // אם המשושה מייצר משאבים (אינו מדבר)
+                drawSprite(gc, "NUM_" + hex.getNumberToken(), hX + 57.5, hY + 24, 45, 42); // ציור עיגול המספר
             }
-            if (hex.hasRobber()) { // אם השודד נמצא כאן
-                drawSpriteCentered(gc, "ROBBER", hX + 80, hY + 65, 45, 90); // ציור תמונת השודד במרכז המשושה
+            if (hex.hasRobber()) { // אם השודד נמצא על המשושה הזה
+                drawSpriteCentered(gc, "ROBBER", hX + 80, hY + 65, 45, 90); // ציור דמות השודד במרכז
             }
         }
 
         // 3. ציור כבישים
-        for (Edge e : engine.getBoard().getAllEdges()) {
-            if (e.hasRoad()) { // אם נבנה כביש על הצלע
-                double[] v1 = getVertexCoords(e.getVertices().get(0)); // קואורדינטות קודקוד 1
-                double[] v2 = getVertexCoords(e.getVertices().get(1)); // קואורדינטות קודקוד 2
-                if (v1 != null && v2 != null) {
-                    // ציור הכביש באמצע הדרך בין שני הקודקודים
+        for (Edge e : engine.getBoard().getAllEdges()) { // מעבר על כל הצלעות בלוח
+            if (e.hasRoad()) { // אם קיימת דרך על הצלע
+                double[] v1 = getVertexCoords(e.getVertices().get(0)); // קואורדינטות קודקוד ראשון
+                double[] v2 = getVertexCoords(e.getVertices().get(1)); // קואורדינטות קודקוד שני
+                if (v1 != null && v2 != null) { // אם שני הקצוות חוקיים
+                    // ציור הכביש בנקודת האמצע שבין שני הקודקודים
                     drawSpriteCentered(gc, getPlayerColorName(e.getOwnerColor()) + "_ROAD", (v1[0]+v2[0])/2, ((v1[1]+v2[1])/2) - VERT_OFFSET, 35, 35);
                 }
             }
         }
 
         // 4. ציור יישובים וערים
-        for (Vertex v : engine.getBoard().getAllVertices()) {
-            if (v.isSettled()) { // אם הקודקוד מיושב
-                double[] pos = getVertexCoords(v); // קבלת המיקום על המסך
-                if (pos != null) {
-                    // בחירת התמונה המתאימה (יישוב או עיר בצבע הנכון)
+        for (Vertex v : engine.getBoard().getAllVertices()) { // מעבר על כל הקודקודים בלוח
+            if (v.isSettled()) { // אם הקודקוד מיושב ע"י שחקן
+                double[] pos = getVertexCoords(v); // קבלת המיקום המדויק על המסך
+                if (pos != null) { // אם המיקום חוקי
+                    // בחירת הגרפיקה המתאימה לפי צבע השחקן וסוג המבנה (יישוב או עיר)
                     String spriteName = getPlayerColorName(v.getOwnerColor()) + (v.isCity()?"_CITY":"_SETTLEMENT");
-                    drawSpriteCentered(gc, spriteName, pos[0], pos[1] - VERT_OFFSET, 45, 40);
+                    drawSpriteCentered(gc, spriteName, pos[0], pos[1] - VERT_OFFSET, 45, 40); // ציור המבנה
                 }
             }
         }
 
         // 5. ציור סרגל הסטטוס העליון (הודעות למשתמש)
-        gc.setFill(new Color(0, 0, 0, 0.7)); // צבע שחור שקוף למחצה
-        gc.fillRoundRect(20, 10, 860, 50, 15, 15); // ציור המלבן המעוגל
-        gc.setFill(Color.YELLOW); // צבע טקסט צהוב להודעה הראשית
-        gc.setFont(Font.font("Arial", FontWeight.BOLD, 18)); // גופן מודגש
-        gc.setTextAlign(TextAlignment.CENTER); // יישור למרכז
-        gc.fillText(lastAction, 450, 32); // כתיבת הפעולה האחרונה
-        gc.setFill(Color.WHITE); // צבע לבן להסבר המשנה
-        gc.setFont(Font.font("Arial", 12));
-        gc.fillText(engine.getLastDistributionResult(), 450, 52); // כתיבת תוצאות חלוקת המשאבים
+        gc.setFill(new Color(0, 0, 0, 0.7)); // הגדרת צבע מילוי שחור שקוף
+        gc.fillRoundRect(20, 10, 860, 50, 15, 15); // ציור הרקע של סרגל ההודעות
+        gc.setFill(Color.YELLOW); // צבע טקסט צהוב להודעה המרכזית
+        gc.setFont(Font.font("Arial", FontWeight.BOLD, 18)); // הגדרת גופן מודגש
+        gc.setTextAlign(TextAlignment.CENTER); // יישור הטקסט למרכז הסרגל
+        gc.fillText(lastAction, 450, 32); // כתיבת הודעת הפעולה האחרונה
+        gc.setFill(Color.WHITE); // צבע טקסט לבן למידע המשני
+        gc.setFont(Font.font("Arial", 12)); // גופן קטן יותר
+        gc.fillText(engine.getLastDistributionResult(), 450, 52); // כתיבת תוצאת חלוקת המשאבים האחרונה
     }
 
     /**
      * [יעילות: O(V+E)] - טיפול בלחיצת עכבר על המסך
      */
-    private void handleMouseClick(double x, double y) {
-        if (engine.isGameOver()) return; // אם המשחק נגמר, לא עושים כלום
+    private void handleMouseClick(double x, double y) { // מתודת ניהול לחיצות עכבר
+        if (engine.isGameOver()) return; // אם המשחק הסתיים, אין לקבל קלט נוסף
 
         // בדיקה אם המשתמש במצב שודד (הזזת השודד)
-        if (engine.isRobberMode()) {
-            for (Hex hex : engine.getBoard().getAllHexes()) {
-                double[] center = getHexCenter(hex);
-                if (Math.hypot(x - center[0], y - center[1]) < 40) { // לחיצה במרכז המשושה
-                    String res = engine.handleRobberMove(hex);
-                    if (res.equals("הוזז")) {
-                        List<Player> victims = engine.getRobberVictims(hex);
-                        if (victims.isEmpty()) {
-                            lastAction = "הזזת את השודד למקום ריק.";
-                        } else if (victims.size() == 1) {
-                            engine.stealResource(victims.get(0));
-                            lastAction = "שדדת את " + victims.get(0).getName();
+        if (engine.isRobberMode()) { // אם המשחק ממתין להזזת שודד
+            for (Hex hex : engine.getBoard().getAllHexes()) { // סריקת כל המשושים
+                double[] center = getHexCenter(hex); // קבלת מרכז המשושה
+                if (Math.hypot(x - center[0], y - center[1]) < 40) { // בדיקה אם הלחיצה קרובה מספיק למרכז
+                    String res = engine.handleRobberMove(hex); // ביצוע ההזזה במנוע
+                    if (res.equals("הוזז")) { // אם ההזזה חוקית ובוצעה
+                        List<Player> victims = engine.getRobberVictims(hex); // מציאת קורבנות פוטנציאליים לשוד
+                        if (victims.isEmpty()) { // אם אין את מי לשדוד
+                            lastAction = "הזזת את השודד למקום ריק."; // עדכון הודעה
+                        } else if (victims.size() == 1) { // אם יש קורבן יחיד
+                            engine.stealResource(victims.get(0)); // שדידה אוטומטית ממנו
+                            lastAction = "שדדת את " + victims.get(0).getName(); // עדכון הודעה
                         } else {
-                            handleStealingDialog(victims);
+                            handleStealingDialog(victims); // הצגת חלון לבחירת הקורבן אם יש כמה
                         }
-                        engine.setRobberMode(false);
+                        engine.setRobberMode(false); // כיבוי מצב שודד
                     } else {
-                        lastAction = res;
+                        lastAction = res; // הצגת סיבת דחיית ההזזה
                     }
-                    refreshUI();
-                    return;
+                    refreshUI(); // רענון הממשק
+                    return; // יציאה מהפונקציה לאחר הטיפול
                 }
             }
         }
 
         // בדיקה אם המשתמש לחץ ליד קודקוד (בניית יישוב/עיר)
-        for (Vertex v : engine.getBoard().getAllVertices()) {
-            double[] pos = getVertexCoords(v); // מיקום הקודקוד
-            if (pos != null && Math.hypot(x - pos[0], y - (pos[1] - VERT_OFFSET)) < 25) { // בדיקת מרחק מהקודקוד
-                if (engine.isSetupPhase()) {
-                    lastAction = engine.handleSetupInteraction(v, null); // פעולת הקמה
+        for (Vertex v : engine.getBoard().getAllVertices()) { // סריקת כל קודקודי הלוח
+            double[] pos = getVertexCoords(v); // קבלת מיקום הקודקוד על המסך
+            if (pos != null && Math.hypot(x - pos[0], y - (pos[1] - VERT_OFFSET)) < 25) { // בדיקת קרבה ללחיצה
+                if (engine.isSetupPhase()) { // אם אנחנו בשלב הצבת הפתיחה
+                    lastAction = engine.handleSetupInteraction(v, null); // טיפול בהצבת פתיחה
                 } else {
-                    // תיקון: אם המקום כבר מיושב על ידי השחקן, ננסה לשדרג לעיר. אחרת, ננסה לבנות יישוב.
-                    if (v.isSettled() && v.getOwnerColor().equals(engine.getCurrentPlayer().getColor())) {
-                        lastAction = engine.attemptUpgradeCity(v);
+                    // אם המקום כבר מיושב על ידי השחקן, ננסה לשדרג לעיר. אחרת, ננסה לבנות יישוב.
+                    if (v.isSettled() && v.getOwnerColor().equals(engine.getCurrentPlayer().getColor())) { // בדיקת בעלות לשדרוג
+                        lastAction = engine.attemptUpgradeCity(v); // ניסיון שדרוג לעיר
                     } else {
-                        lastAction = engine.attemptBuildSettlement(v);
+                        lastAction = engine.attemptBuildSettlement(v); // ניסיון בניית יישוב חדש
                     }
                 }
-                refreshUI(); // עדכון התצוגה לאחר הפעולה
-                return;
+                refreshUI(); // רענון הממשק לאחר הפעולה
+                return; // סיום הטיפול בלחיצה
             }
         }
 
         // בדיקה אם המשתמש לחץ ליד צלע (בניית כביש)
-        for (Edge edge : engine.getBoard().getAllEdges()) {
-            double[] v1 = getVertexCoords(edge.getVertices().get(0));
-            double[] v2 = getVertexCoords(edge.getVertices().get(1));
-            if (v1 != null && v2 != null) {
-                // בדיקת מרחק הלחיצה מהקטע שמחבר את שני הקודקודים
+        for (Edge edge : engine.getBoard().getAllEdges()) { // סריקת כל צלעות הלוח
+            double[] v1 = getVertexCoords(edge.getVertices().get(0)); // קואורדינטות קודקוד 1
+            double[] v2 = getVertexCoords(edge.getVertices().get(1)); // קואורדינטות קודקוד 2
+            if (v1 != null && v2 != null) { // אם שני הקצוות קיימים
+                // בדיקת מרחק הלחיצה מהקטע שמחבר את שני הקודקודים (זיהוי לחיצה על כביש)
                 if (distToSegment(x, y, v1[0], v1[1]-VERT_OFFSET, v2[0], v2[1]-VERT_OFFSET) < 20) {
-                    if (engine.isSetupPhase()) {
-                        lastAction = engine.handleSetupInteraction(null, edge); // פעולת הקמה לכביש
+                    if (engine.isSetupPhase()) { // אם בשלב ההקמה
+                        lastAction = engine.handleSetupInteraction(null, edge); // טיפול בהצבת כביש פתיחה
                     } else {
-                        lastAction = engine.attemptBuildRoad(edge); // בניית כביש רגילה
+                        lastAction = engine.attemptBuildRoad(edge); // ניסיון בניית כביש רגיל
                     }
-                    refreshUI(); // עדכון התצוגה
-                    return;
+                    refreshUI(); // רענון הממשק
+                    return; // סיום הטיפול
                 }
             }
         }
@@ -295,240 +295,240 @@ public class CatanApp extends Application {
     /**
      * [יעילות: O(P * N)] - מעדכן את הטבלה בצד המציגה לכל שחקן כמה משאבים ונקודות יש לו
      */
-    private void updateStatsPanel() {
-        statsPanel.getChildren().clear(); // ניקוי הפאנל הישן
-        Player currentPlayer = engine.getCurrentPlayer();
+    private void updateStatsPanel() { // מתודת עדכון פאנל הסטטיסטיקות
+        statsPanel.getChildren().clear(); // ניקוי כל האיברים הקיימים בפאנל
+        Player currentPlayer = engine.getCurrentPlayer(); // קבלת השחקן שתורו כרגע
         
-        for (Player p : engine.getPlayers()) { // עובר על כל השחקנים
-            VBox box = new VBox(5); // תיבה לכל שחקן
-            box.setPadding(new Insets(8));
+        for (Player p : engine.getPlayers()) { // מעבר על כלל השחקנים במשחק
+            VBox box = new VBox(5); // יצירת תיבה אנכית לכל שחקן עם ריווח קטן
+            box.setPadding(new Insets(8)); // הגדרת ריווח פנימי לתיבה
             
-            boolean isCurrent = p.equals(currentPlayer);
-            String bgColor = isCurrent ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)";
-            String borderColor = isCurrent ? getHexColor(p.getColor()) : "gray";
-            String borderWidth = isCurrent ? "3" : "1";
+            boolean isCurrent = p.equals(currentPlayer); // בדיקה האם זה השחקן הנוכחי
+            String bgColor = isCurrent ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)"; // צבע רקע בהיר יותר לשחקן הנוכחי
+            String borderColor = isCurrent ? getHexColor(p.getColor()) : "gray"; // צבע מסגרת כצבע השחקן או אפור
+            String borderWidth = isCurrent ? "3" : "1"; // מסגרת עבה יותר לשחקן הנוכחי
             
             box.setStyle(String.format("-fx-background-color: %s; -fx-border-color: %s; -fx-border-radius: 5; -fx-border-width: %s;", 
-                         bgColor, borderColor, borderWidth));
+                         bgColor, borderColor, borderWidth)); // החלת הסגנון העיצובי על התיבה
             
-            String nameText = p.getName() + ": " + p.getVisibleVictoryPoints() + " נקודות";
-            if (isCurrent) nameText += " (תור נוכחי ⭐)";
-            if (p.hasLargestArmy()) nameText += " [הצבא הגדול ⚔️]";
-            if (p.hasLongestRoad()) nameText += " [הדרך הארוכה 🛤️]";
+            String nameText = p.getName() + ": " + p.getVisibleVictoryPoints() + " נקודות"; // יצירת טקסט שם ונקודות
+            if (isCurrent) nameText += " (תור נוכחי ⭐)"; // הוספת סימון לשחקן הפעיל
+            if (p.hasLargestArmy()) nameText += " [הצבא הגדול ⚔️]"; // סימון בעל בונוס הצבא
+            if (p.hasLongestRoad()) nameText += " [הדרך הארוכה 🛤️]"; // סימון בעל בונוס הדרך
             
-            Label nameLabel = new Label(nameText);
-            nameLabel.setTextFill(p.getColor()); // צבע הטקסט כצבע השחקן
-            nameLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+            Label nameLabel = new Label(nameText); // יצירת תווית לשם השחקן
+            nameLabel.setTextFill(p.getColor()); // קביעת צבע הטקסט לצבע השחקן
+            nameLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14)); // גופן מודגש וברור
             
             // בניה של טקסט המשאבים - פירוט מלא למשתמש או לכולם במצב אוטונומי
-            String resText = "סה\"כ משאבים: " + p.getTotalResourcesCount();
-            if (p.getName().equals("אתה") || engine.isAutonomousMode()) {
-                resText += "\n" + formatResourceBreakdown(p);
+            String resText = "סה\"כ משאבים: " + p.getTotalResourcesCount(); // הצגת סכום המשאבים
+            if (p.getName().equals("אתה") || engine.isAutonomousMode()) { // אם המידע גלוי (שחקן אנושי או מצב צפייה)
+                resText += "\n" + formatResourceBreakdown(p); // הוספת פירוט סוגי המשאבים
                 
-                String devText = formatDevCards(p);
+                String devText = formatDevCards(p); // קבלת טקסט קלפי הפיתוח שביד
                 if (!devText.isEmpty()) {
-                    resText += "\nביד: " + devText;
+                    resText += "\nביד: " + devText; // הוספת המידע לטקסט
                 }
                 
-                String playedText = formatPlayedDevCards(p);
+                String playedText = formatPlayedDevCards(p); // קבלת טקסט קלפי הפיתוח ששוחקו
                 if (!playedText.isEmpty()) {
-                    resText += "\nשוחקו: " + playedText;
+                    resText += "\nשוחקו: " + playedText; // הוספת המידע לטקסט
                 }
             }
             
-            Label resLabel = new Label(resText);
-            resLabel.setTextFill(Color.WHITE);
-            resLabel.setFont(Font.font("Arial", 11));
+            Label resLabel = new Label(resText); // יצירת תווית למידע המשאבים
+            resLabel.setTextFill(Color.WHITE); // צבע טקסט לבן
+            resLabel.setFont(Font.font("Arial", 11)); // גופן קטן יותר לפרטים
             
-            box.getChildren().addAll(nameLabel, resLabel); // הוספת הטקסטים לתיבה
-            statsPanel.getChildren().add(box); // הוספת התיבה לפאנל
+            box.getChildren().addAll(nameLabel, resLabel); // הוספת התוויות לתיבת השחקן
+            statsPanel.getChildren().add(box); // הוספת תיבת השחקן לפאנל הצדדי
         }
     }
 
-    private String getHexColor(Color c) {
+    private String getHexColor(Color c) { // מתודת עזר להמרת צבע לקוד HEX
         return String.format("#%02X%02X%02X", 
             (int)(c.getRed() * 255), 
             (int)(c.getGreen() * 255), 
-            (int)(c.getBlue() * 255));
+            (int)(c.getBlue() * 255)); // החזרת מחרוזת בפורמט צבע של CSS
     }
 
-    private String formatPlayedDevCards(Player p) {
-        List<DevCardType> played = p.getPlayedDevCards();
-        if (played.isEmpty()) return "";
+    private String formatPlayedDevCards(Player p) { // מתודת עיצוב קלפים ששוחקו
+        List<DevCardType> played = p.getPlayedDevCards(); // קבלת הרשימה מהשחקן
+        if (played.isEmpty()) return ""; // אם לא שוחקו קלפים
         
-        Map<DevCardType, Integer> counts = new HashMap<>();
-        for (DevCardType card : played) {
-            counts.put(card, counts.getOrDefault(card, 0) + 1);
+        Map<DevCardType, Integer> counts = new HashMap<>(); // מפה לספירת כמות מכל סוג
+        for (DevCardType card : played) { // מעבר על הקלפים
+            counts.put(card, counts.getOrDefault(card, 0) + 1); // עדכון הספירה
         }
         
-        return formatDevMap(counts);
+        return formatDevMap(counts); // החזרת המחרוזת המעוצבת
     }
 
     /**
      * [יעילות: O(D)] - פורמט קלפי פיתוח להצגה.
      */
-    private String formatDevCards(Player p) {
-        List<DevCardType> allCards = new ArrayList<>(p.getDevCards());
-        allCards.addAll(p.getNewDevCards());
-        if (allCards.isEmpty()) return "";
+    private String formatDevCards(Player p) { // מתודת עיצוב קלפים שביד
+        List<DevCardType> allCards = new ArrayList<>(p.getDevCards()); // יצירת רשימה מהקלפים הישנים
+        allCards.addAll(p.getNewDevCards()); // הוספת הקלפים שנקנו בתור הנוכחי
+        if (allCards.isEmpty()) return ""; // אם היד ריקה
 
-        Map<DevCardType, Integer> counts = new HashMap<>();
-        for (DevCardType card : allCards) {
-            counts.put(card, counts.getOrDefault(card, 0) + 1);
+        Map<DevCardType, Integer> counts = new HashMap<>(); // מפה לספירה
+        for (DevCardType card : allCards) { // מעבר על כל הקלפים ביד
+            counts.put(card, counts.getOrDefault(card, 0) + 1); // עדכון הכמות במפה
         }
 
-        return formatDevMap(counts);
+        return formatDevMap(counts); // עיצוב המפה למחרוזת טקסט
     }
 
-    private String formatDevMap(Map<DevCardType, Integer> counts) {
-        List<String> parts = new ArrayList<>();
-        for (Map.Entry<DevCardType, Integer> entry : counts.entrySet()) {
-            String name = "";
-            DevCardType type = entry.getKey();
-            if (type == DevCardType.KNIGHT) {
+    private String formatDevMap(Map<DevCardType, Integer> counts) { // מתודת עזר לעיצוב מפת קלפים
+        List<String> parts = new ArrayList<>(); // רשימת חלקי הטקסט
+        for (Map.Entry<DevCardType, Integer> entry : counts.entrySet()) { // מעבר על רכיבי המפה
+            String name = ""; // שם הקלף בעברית
+            DevCardType type = entry.getKey(); // סוג הקלף
+            if (type == DevCardType.KNIGHT) { // תרגום אביר
                 name = "אביר";
-            } else if (type == DevCardType.VICTORY_POINT) {
+            } else if (type == DevCardType.VICTORY_POINT) { // תרגום נקודת ניצחון
                 name = "נקודת ניצחון";
-            } else if (type == DevCardType.ROAD_BUILDING) {
+            } else if (type == DevCardType.ROAD_BUILDING) { // תרגום בניית דרכים
                 name = "בניית דרכים";
-            } else if (type == DevCardType.MONOPOLY) {
+            } else if (type == DevCardType.MONOPOLY) { // תרגום מונופול
                 name = "מונופול";
-            } else if (type == DevCardType.YEAR_OF_PLENTY) {
+            } else if (type == DevCardType.YEAR_OF_PLENTY) { // תרגום שנת שפע
                 name = "שנת שפע";
             }
-            parts.add(name + (entry.getValue() > 1 ? " (x" + entry.getValue() + ")" : ""));
+            parts.add(name + (entry.getValue() > 1 ? " (x" + entry.getValue() + ")" : "")); // הוספת השם והכמות
         }
-        return String.join(", ", parts);
+        return String.join(", ", parts); // חיבור כל החלקים עם פסיק
     }
 
     /**
      * [יעילות: O(N)] - עזר לעיצוב רשימת המשאבים בעברית.
      */
-    private String formatResourceBreakdown(Player p) {
-        Map<ResourceType, Integer> res = p.getResources();
-        List<String> parts = new ArrayList<>();
-        for (ResourceType type : ResourceType.values()) {
-            if (type != ResourceType.NONE) {
-                int count = res.getOrDefault(type, 0);
-                if (count > 0 || p.getName().equals("אתה")) {
-                    parts.add(type.toHebrew() + ": " + count);
+    private String formatResourceBreakdown(Player p) { // מתודת פירוט המשאבים
+        Map<ResourceType, Integer> res = p.getResources(); // קבלת מפת המשאבים מהשחקן
+        List<String> parts = new ArrayList<>(); // רשימת חלקי הטקסט
+        for (ResourceType type : ResourceType.values()) { // מעבר על כל סוגי המשאבים האפשריים
+            if (type != ResourceType.NONE) { // התעלמות ממשאב "ריק"
+                int count = res.getOrDefault(type, 0); // כמה יחידות יש לשחקן
+                if (count > 0 || p.getName().equals("אתה")) { // הצגת המשאב אם יש ממנו או שזה השחקן האנושי
+                    parts.add(type.toHebrew() + ": " + count); // הוספת השם בעברית והכמות
                 }
             }
         }
-        return String.join(" | ", parts);
+        return String.join(" | ", parts); // חיבור עם מפריד אנכי
     }
 
     /**
      * [יעילות: O(1)] - עדכון מצב הכפתורים והתצוגה לפי מצב המשחק.
      */
-    private void updateControls() {
-        Player p = engine.getCurrentPlayer(); // מי השחקן הנוכחי
-        boolean isHuman = !(p instanceof AiPlayer); // האם הוא אנושי
-        int firstRoundLimit = engine.getPlayers().size();
-        boolean isFirstRound = engine.getTurnCounter() <= firstRoundLimit;
+    private void updateControls() { // מתודת ניהול מצבי כפתורים
+        Player p = engine.getCurrentPlayer(); // מי השחקן שתורו כרגע
+        boolean isHuman = !(p instanceof AiPlayer); // בדיקה האם השחקן אנושי
+        int firstRoundLimit = engine.getPlayers().size(); // קביעת גבול הסיבוב הראשון
+        boolean isFirstRound = engine.getTurnCounter() <= firstRoundLimit; // בדיקה האם בסיבוב ללא בנייה
 
         // תנאי לביצוע פעולות: אנושי, אחרי הטלה, לא במצב שודד, לא סיבוב ראשון ולא סוף משחק
         boolean canAct = isHuman && engine.hasRolled() && !engine.isRobberMode() && !isFirstRound && !engine.isGameOver();
         
-        rollButton.setDisable(!isHuman || engine.hasRolled() || engine.isSetupPhase() || engine.isGameOver());
-        endTurnButton.setDisable(!isHuman || !engine.hasRolled() || engine.isRobberMode() || engine.isGameOver());
-        tradeButton.setDisable(!canAct); // כפתור מסחר פעיל רק כשאפשר לפעול
-        buyDevButton.setDisable(!canAct); // כפתור קלפים פעיל רק כשאפשר לפעול
+        rollButton.setDisable(!isHuman || engine.hasRolled() || engine.isSetupPhase() || engine.isGameOver()); // השבתת כפתור קוביות לפי התנאים
+        endTurnButton.setDisable(!isHuman || !engine.hasRolled() || engine.isRobberMode() || engine.isGameOver()); // השבתת כפתור סיום תור
+        tradeButton.setDisable(!canAct); // הפעלת מסחר רק כשכל התנאים מתקיימים
+        buyDevButton.setDisable(!canAct); // הפעלת קניית קלפים רק כשמותר לפעול
         
+        // בדיקה האם יש קלפים שניתן להפעיל כרגע
         boolean hasPlayableCards = isHuman && !p.getDevCards().isEmpty() && !p.hasPlayedDevCardThisTurn() && !engine.isGameOver() && !engine.isSetupPhase() && !isFirstRound;
-        useDevCardButton.setDisable(!hasPlayableCards);
+        useDevCardButton.setDisable(!hasPlayableCards); // הפעלת כפתור שימוש בקלף
 
         String phaseName = engine.isSetupPhase() ? "הקמה" : 
                           engine.isRobberMode() ? "שודד" : 
-                          isFirstRound ? "סיבוב ראשון (ללא בנייה/מסחר)" : "משחק רגיל";
-        statusLabel.setText("שלב: " + phaseName);
+                          isFirstRound ? "סיבוב ראשון (ללא בנייה/מסחר)" : "משחק רגיל"; // קביעת שם השלב להצגה
+        statusLabel.setText("שלב: " + phaseName); // עדכון טקסט השלב בממשק
     }
 
-    private boolean isDiscardDialogShowing = false; // דגל למניעת פתיחת מספר דיאלוגים במקביל
+    private boolean isDiscardDialogShowing = false; // דגל למניעת פתיחת מספר חלונות במקביל
 
     /**
      * [יעילות: O(P)] - בדיקה האם השחקן האנושי צריך לזרוק משאבים ומציגת דיאלוג בהתאם.
      */
-    private void checkDiscardNeeded() {
-        if (isDiscardDialogShowing) return; // אם כבר יש חלון פתוח, אל תפתח אחד נוסף
+    private void checkDiscardNeeded() { // מתודת בדיקת זריקת קלפים
+        if (isDiscardDialogShowing) return; // יציאה אם החלון כבר פתוח
 
-        Player human = engine.getPlayerByName("אתה");
-        if (human != null && engine.getPlayersNeedingToDiscard().contains(human)) {
-            isDiscardDialogShowing = true;
-            javafx.application.Platform.runLater(() -> {
+        Player human = engine.getPlayerByName("אתה"); // חיפוש השחקן האנושי
+        if (human != null && engine.getPlayersNeedingToDiscard().contains(human)) { // אם עליו לזרוק חצי מהקלפים
+            isDiscardDialogShowing = true; // סימון שהחלון פתוח
+            javafx.application.Platform.runLater(() -> { // הרצה על ה-UI Thread
                 try {
-                    int required = human.getTotalResourcesCount() / 2;
+                    int required = human.getTotalResourcesCount() / 2; // חישוב כמות הקלפים שיש לזרוק
                     
-                    Dialog<Map<ResourceType, Integer>> dialog = new Dialog<>();
-                    dialog.setTitle("זריקת משאבים (יצא 7!)");
-                    dialog.setHeaderText("יש לך יותר מ-7 קלפים. עליך לזרוק " + required + " משאבים.");
+                    Dialog<Map<ResourceType, Integer>> dialog = new Dialog<>(); // יצירת חלון דיאלוג
+                    dialog.setTitle("זריקת משאבים (יצא 7!)"); // כותרת החלון
+                    dialog.setHeaderText("יש לך יותר מ-7 קלפים. עליך לזרוק " + required + " משאבים."); // הסבר
 
-                    GridPane grid = new GridPane();
-                    grid.setHgap(10); grid.setVgap(10);
-                    grid.setPadding(new Insets(20, 150, 10, 10));
+                    GridPane grid = new GridPane(); // פריסת רשת לבחירת המשאבים
+                    grid.setHgap(10); grid.setVgap(10); // רווחים בין תאים
+                    grid.setPadding(new Insets(20, 150, 10, 10)); // שוליים
 
-                    Map<ResourceType, Spinner<Integer>> spinners = new HashMap<>();
-                    int row = 0;
-                    for (ResourceType type : ResourceType.values()) {
-                        if (type != ResourceType.NONE) {
-                            int count = human.getResources().getOrDefault(type, 0);
-                            if (count > 0) {
-                                grid.add(new Label(type.toHebrew() + " (יש לך " + count + "):"), 0, row);
-                                Spinner<Integer> spinner = new Spinner<>(0, count, 0);
-                                spinner.setEditable(true);
-                                spinners.put(type, spinner);
-                                grid.add(spinner, 1, row);
-                                row++;
+                    Map<ResourceType, Spinner<Integer>> spinners = new HashMap<>(); // מפה לשמירת פקדי הבחירה
+                    int row = 0; // אינדקס שורה ברשת
+                    for (ResourceType type : ResourceType.values()) { // מעבר על כל סוגי המשאבים
+                        if (type != ResourceType.NONE) { // התעלמות מסוג ריק
+                            int count = human.getResources().getOrDefault(type, 0); // כמה יש לשחקן
+                            if (count > 0) { // הצגת רק משאבים שקיימים במלאי
+                                grid.add(new Label(type.toHebrew() + " (יש לך " + count + "):"), 0, row); // הצגת שם המשאב
+                                Spinner<Integer> spinner = new Spinner<>(0, count, 0); // יצירת פקד בחירת כמות
+                                spinner.setEditable(true); // אפשור הקלדה
+                                spinners.put(type, spinner); // שמירה במפה
+                                grid.add(spinner, 1, row); // הוספה לרשת
+                                row++; // קידום שורה
                             }
                         }
                     }
 
-                    dialog.getDialogPane().setContent(grid);
-                    ButtonType discardBtn = new ButtonType("זרוק נבחרים", ButtonBar.ButtonData.OK_DONE);
-                    ButtonType randomBtn = new ButtonType("זרוק אקראית", ButtonBar.ButtonData.OTHER);
-                    dialog.getDialogPane().getButtonTypes().addAll(discardBtn, randomBtn);
+                    dialog.getDialogPane().setContent(grid); // הוספת הרשת לחלון
+                    ButtonType discardBtn = new ButtonType("זרוק נבחרים", ButtonBar.ButtonData.OK_DONE); // כפתור אישור
+                    ButtonType randomBtn = new ButtonType("זרוק אקראית", ButtonBar.ButtonData.OTHER); // כפתור זריקה אוטומטית
+                    dialog.getDialogPane().getButtonTypes().addAll(discardBtn, randomBtn); // הוספת הכפתורים לחלון
 
-                    dialog.setResultConverter(dialogButton -> {
-                        if (dialogButton == discardBtn) {
-                            Map<ResourceType, Integer> toDiscard = new HashMap<>();
-                            spinners.forEach((type, spinner) -> toDiscard.put(type, spinner.getValue()));
-                            return toDiscard;
+                    dialog.setResultConverter(dialogButton -> { // הגדרת המרת תוצאת הלחיצה
+                        if (dialogButton == discardBtn) { // אם נלחץ כפתור הבחירה הידנית
+                            Map<ResourceType, Integer> toDiscard = new HashMap<>(); // יצירת מפת זריקה
+                            spinners.forEach((type, spinner) -> toDiscard.put(type, spinner.getValue())); // איסוף הערכים מהפקדים
+                            return toDiscard; // החזרת הבחירה
                         } else if (dialogButton == randomBtn) {
-                            return new HashMap<>(); // מסמן זריקה אקראית
+                            return new HashMap<>(); // החזרת מפה ריקה כסימן לזריקה אקראית
                         }
                         return null;
                     });
 
-                    Optional<Map<ResourceType, Integer>> result = dialog.showAndWait();
-                    if (result.isPresent()) {
-                        Map<ResourceType, Integer> choice = result.get();
-                        if (choice.isEmpty()) { // זריקה אקראית
-                            Map<ResourceType, Integer> randomChoice = new HashMap<>();
-                            int count = 0;
-                            Random rand = new Random();
-                            while (count < required) {
-                                ResourceType r = ResourceType.values()[rand.nextInt(ResourceType.values().length)];
-                                if (r != ResourceType.NONE && human.getResources().getOrDefault(r, 0) > randomChoice.getOrDefault(r, 0)) {
-                                    randomChoice.put(r, randomChoice.getOrDefault(r, 0) + 1);
-                                    count++;
+                    Optional<Map<ResourceType, Integer>> result = dialog.showAndWait(); // הצגת החלון והמתנה לתשובה
+                    if (result.isPresent()) { // אם המשתמש בחר פעולה
+                        Map<ResourceType, Integer> choice = result.get(); // קבלת התוצאה
+                        if (choice.isEmpty()) { // מקרה של זריקה אקראית
+                            Map<ResourceType, Integer> randomChoice = new HashMap<>(); // מפה חדשה
+                            int count = 0; // מונה זריקה
+                            Random rand = new Random(); // מחולל מספרים אקראיים
+                            while (count < required) { // לולאה עד להגעה לכמות הנדרשת
+                                ResourceType r = ResourceType.values()[rand.nextInt(ResourceType.values().length)]; // בחירת סוג אקראי
+                                if (r != ResourceType.NONE && human.getResources().getOrDefault(r, 0) > randomChoice.getOrDefault(r, 0)) { // אם נשאר מה לזרוק
+                                    randomChoice.put(r, randomChoice.getOrDefault(r, 0) + 1); // הוספה למפת הזריקה
+                                    count++; // עדכון המונה
                                 }
                             }
-                            engine.manualDiscard(human, randomChoice);
-                            lastAction = "זרקת משאבים אקראית.";
+                            engine.manualDiscard(human, randomChoice); // ביצוע הזריקה האקראית במנוע
+                            lastAction = "זרקת משאבים אקראית."; // עדכון סטטוס
                         } else {
-                            String res = engine.manualDiscard(human, choice);
-                            if (!res.equals("SUCCESS") && !res.equals("WAITING")) {
-                                Alert error = new Alert(Alert.AlertType.ERROR, res);
-                                error.showAndWait();
-                                // במקרה של שגיאה, נשחרר את הדגל ונקרא שוב ב-refreshUI הבא
+                            String res = engine.manualDiscard(human, choice); // ביצוע זריקה ידנית במנוע
+                            if (!res.equals("SUCCESS") && !res.equals("WAITING")) { // אם חסרים קלפים בבחירה או טעות אחרת
+                                Alert error = new Alert(Alert.AlertType.ERROR, res); // יצירת הודעת שגיאה
+                                error.showAndWait(); // הצגת השגיאה
                             } else {
-                                lastAction = "זרקת את המשאבים שבחרת.";
+                                lastAction = "זרקת את המשאבים שבחרת."; // עדכון סטטוס הצלחה
                             }
                         }
                     }
                 } finally {
-                    isDiscardDialogShowing = false;
-                    refreshUI();
+                    isDiscardDialogShowing = false; // שחרור הדגל בכל מקרה (הצלחה או ביטול)
+                    refreshUI(); // רענון הממשק לסנכרון נתונים
                 }
             });
         }
@@ -537,81 +537,81 @@ public class CatanApp extends Application {
     /**
      * [יעילות: O(1)] - מפעיל את הבוט לצעד אחד אחרי השהיה קלה
      */
-    private void triggerAiStep() {
-        javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(javafx.util.Duration.millis(700)); // השהיה מקוצרת של 0.7 שניות
-        pause.setOnFinished(e -> { // מה עושים כשהזמן עובר
-            String desc = engine.executeSingleAiAction(); // ביצוע פעולה אחת של הבוט במנוע
-            if (desc != null && desc.startsWith("TRADE_OFFER:")) {
-                javafx.application.Platform.runLater(() -> handleBotTradeOffer(desc));
+    private void triggerAiStep() { // מתודת הפעלת צעד של בוט
+        javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(javafx.util.Duration.millis(700)); // הגדרת השהיה של 0.7 שניות
+        pause.setOnFinished(e -> { // מה קורה כשהזמן נגמר
+            String desc = engine.executeSingleAiAction(); // ביצוע הפעולה הבאה של הבוט במנוע
+            if (desc != null && desc.startsWith("TRADE_OFFER:")) { // אם הבוט מציע מסחר לאדם
+                javafx.application.Platform.runLater(() -> handleBotTradeOffer(desc)); // הצגת חלון ההצעה למשתמש
             } else {
-                if (desc != null) lastAction = desc; // עדכון תיאור הפעולה
-                refreshUI(); // עדכון הממשק הגרפי
+                if (desc != null) lastAction = desc; // שמירת תיאור הפעולה שבוצעה
+                refreshUI(); // רענון הממשק להצגת המהלך
             }
         });
-        pause.play(); // התחלת הספירה לאחור
+        pause.play(); // התחלת ההשהיה
     }
 
     /**
      * [יעילות: O(P)] - הצגת דיאלוג לבחירת שחקן לשדוד ממנו.
      */
-    private void handleStealingDialog(List<Player> victims) {
-        ChoiceDialog<Player> dialog = new ChoiceDialog<>(victims.get(0), victims);
-        dialog.setTitle("שוד");
-        dialog.setHeaderText("ממי תרצה לשדוד משאב?");
-        dialog.setContentText("בחר שחקן:");
+    private void handleStealingDialog(List<Player> victims) { // מתודת בחירת נשדד
+        ChoiceDialog<Player> dialog = new ChoiceDialog<>(victims.get(0), victims); // יצירת חלון בחירה מהרשימה
+        dialog.setTitle("שוד"); // כותרת החלון
+        dialog.setHeaderText("ממי תרצה לשדוד משאב?"); // כותרת פנימית
+        dialog.setContentText("בחר שחקן:"); // טקסט בחירה
 
-        Optional<Player> result = dialog.showAndWait();
-        result.ifPresent(victim -> {
-            engine.stealResource(victim);
-            lastAction = "שדדת את " + victim.getName();
+        Optional<Player> result = dialog.showAndWait(); // המתנה לבחירת השחקן
+        result.ifPresent(victim -> { // אם נבחר שחקן
+            engine.stealResource(victim); // ביצוע השוד במנוע
+            lastAction = "שדדת את " + victim.getName(); // עדכון הסטטוס
         });
     }
 
     /**
      * [יעילות: O(1)] - הצגת דיאלוג לאישור הצעת מסחר מהבוט
      */
-    private void handleBotTradeOffer(String offerStr) {
-        String[] parts = offerStr.split(":");
-        String botName = parts[1];
-        ResourceType botGives = ResourceType.valueOf(parts[2]);
-        int botGivesAmt = 1;
-        ResourceType botWants = null;
-        int botWantsAmt = 1;
+    private void handleBotTradeOffer(String offerStr) { // מתודת טיפול בהצעת מסחר מבוט
+        String[] parts = offerStr.split(":"); // פירוק מחרוזת ההצעה לחלקים
+        String botName = parts[1]; // שם הבוט המציע
+        ResourceType botGives = ResourceType.valueOf(parts[2]); // מה הבוט נותן
+        int botGivesAmt = 1; // כמות ברירת מחדל למה שהבוט נותן
+        ResourceType botWants = null; // מה הבוט רוצה
+        int botWantsAmt = 1; // כמות ברירת מחדל למה שהבוט רוצה
 
-        if (parts.length >= 6) {
-            botGivesAmt = Integer.parseInt(parts[3]);
-            botWants = ResourceType.valueOf(parts[4]);
-            botWantsAmt = Integer.parseInt(parts[5]);
+        if (parts.length >= 6) { // אם ההצעה כוללת כמויות (פורמט חדש)
+            botGivesAmt = Integer.parseInt(parts[3]); // קריאת הכמות שהבוט נותן
+            botWants = ResourceType.valueOf(parts[4]); // קריאת המשאב שהבוט רוצה
+            botWantsAmt = Integer.parseInt(parts[5]); // קריאת הכמות שהבוט רוצה
         } else {
-            botWants = ResourceType.valueOf(parts[3]);
+            botWants = ResourceType.valueOf(parts[3]); // פורמט ישן ללא כמויות
         }
 
-        final ResourceType finalWants = botWants;
-        final int finalGivesAmt = botGivesAmt;
-        final int finalWantsAmt = botWantsAmt;
+        final ResourceType finalWants = botWants; // שמירת משתנים סופיים לשימוש בתוך ה-Lambda
+        final int finalGivesAmt = botGivesAmt; // כמות סופית נתינה
+        final int finalWantsAmt = botWantsAmt; // כמות סופית דרישה
 
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("הצעת מסחר");
-        alert.setHeaderText(botName + " מציע לך עסקה!");
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION); // יצירת חלון אישור (Confirmation)
+        alert.setTitle("הצעת מסחר"); // כותרת החלון
+        alert.setHeaderText(botName + " מציע לך עסקה!"); // הודעת הכותרת
         alert.setContentText(botName + " נותן לך: " + botGivesAmt + " " + botGives.toHebrew() + "\n" +
-                             "הוא מבקש ממך: " + botWantsAmt + " " + botWants.toHebrew());
+                             "הוא מבקש ממך: " + botWantsAmt + " " + botWants.toHebrew()); // פירוט העסקה
 
-        ButtonType acceptBtn = new ButtonType("הסכם");
-        ButtonType rejectBtn = new ButtonType("סרב", ButtonBar.ButtonData.CANCEL_CLOSE);
-        alert.getButtonTypes().setAll(acceptBtn, rejectBtn);
+        ButtonType acceptBtn = new ButtonType("הסכם"); // יצירת כפתור אישור
+        ButtonType rejectBtn = new ButtonType("סרב", ButtonBar.ButtonData.CANCEL_CLOSE); // יצירת כפתור סירוב
+        alert.getButtonTypes().setAll(acceptBtn, rejectBtn); // הוספת הכפתורים לחלון
 
-        Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == acceptBtn) {
-            Player human = engine.getPlayers().get(0);
-            AiPlayer bot = (AiPlayer) engine.getPlayerByName(botName);
-            engine.executeTrade(bot, human, Map.of(botGives, finalGivesAmt), Map.of(finalWants, finalWantsAmt));
-            lastAction = "קיבלת את ההצעה של " + botName;
+        Optional<ButtonType> result = alert.showAndWait(); // הצגת החלון והמתנה לתגובה
+        if (result.isPresent() && result.get() == acceptBtn) { // אם המשתמש הסכים
+            Player human = engine.getPlayers().get(0); // זיהוי השחקן האנושי
+            AiPlayer bot = (AiPlayer) engine.getPlayerByName(botName); // זיהוי הבוט המציע
+            engine.executeTrade(bot, human, Map.of(botGives, finalGivesAmt), Map.of(finalWants, finalWantsAmt)); // ביצוע המסחר במנוע
+            lastAction = "קיבלת את ההצעה של " + botName; // עדכון הודעת הצלחה
         } else {
-            AiPlayer bot = (AiPlayer) engine.getPlayerByName(botName);
-            bot.markTradeAsRejected(botGives, finalGivesAmt, finalWants, finalWantsAmt, engine.getTurnCounter());
-            lastAction = "סירבת להצעה של " + botName;
+            AiPlayer bot = (AiPlayer) engine.getPlayerByName(botName); // זיהוי הבוט
+            bot.markTradeAsRejected(botGives, finalGivesAmt, finalWants, finalWantsAmt, engine.getTurnCounter()); // רישום הסירוב בזיכרון הבוט
+            lastAction = "סירבת להצעה של " + botName; // עדכון הודעת סירוב
         }
-        refreshUI();
+        refreshUI(); // רענון הממשק לסנכרון המשאבים
     }
 
     // --- פונקציות עזר לחישובים גרפיים וציור ---
@@ -619,11 +619,11 @@ public class CatanApp extends Application {
     /**
      * [יעילות: O(1)] - ציור נכס גרפי מתוך גליון התמונות.
      */
-    private void drawSprite(GraphicsContext gc, String key, double x, double y, double w, double h) {
-        Image sheet = AssetManager.getSpriteSheet(); // טעינת התמונה הראשית
-        Rectangle2D vp = AssetManager.getViewport(key); // קבלת חלון החיתוך (Viewport) עבור המפתח המבוקש
-        if (sheet != null && vp != null) {
-            // ציור החלק הספציפי מהתמונה על המיקום המבוקש בקנבס
+    private void drawSprite(GraphicsContext gc, String key, double x, double y, double w, double h) { // מתודת ציור תמונה
+        Image sheet = AssetManager.getSpriteSheet(); // טעינת תמונת המקור הגדולה
+        Rectangle2D vp = AssetManager.getViewport(key); // קבלת אזור החיתוך המתאים למפתח
+        if (sheet != null && vp != null) { // אם התמונה והחיתוך קיימים
+            // ביצוע הציור על הקנבס לפי הקואורדינטות והחיתוך המבוקש
             gc.drawImage(sheet, vp.getMinX(), vp.getMinY(), vp.getWidth(), vp.getHeight(), x, y, w, h);
         }
     }
@@ -631,216 +631,216 @@ public class CatanApp extends Application {
     /**
      * [יעילות: O(1)] - ציור נכס גרפי כשהקואורדינטות הן המרכז שלו.
      */
-    private void drawSpriteCentered(GraphicsContext gc, String key, double cx, double cy, double w, double h) {
-        drawSprite(gc, key, cx - w/2, cy - h/2, w, h); // הזזה בחצי גובה וחצי רוחב
+    private void drawSpriteCentered(GraphicsContext gc, String key, double cx, double cy, double w, double h) { // מתודת ציור ממורכז
+        drawSprite(gc, key, cx - w/2, cy - h/2, w, h); // חישוב הפינה השמאלית העליונה לפי המרכז והמידות
     }
 
     /**
      * [יעילות: O(1)] - המרת צבע JavaFX לשם טקסטואלי עבור טעינת תמונות.
      */
-    private String getPlayerColorName(Color c) {
-        if (c.equals(Color.RED)) return "RED";
-        if (c.equals(Color.BLUE)) return "BLUE";
-        if (c.equals(Color.ORANGE)) return "ORANGE";
-        if (c.equals(Color.WHITE)) return "WHITE";
-        return "RED"; // ברירת מחדל
+    private String getPlayerColorName(Color c) { // מתודת המרת צבע לשם
+        if (c.equals(Color.RED)) return "RED"; // אדום
+        if (c.equals(Color.BLUE)) return "BLUE"; // כחול
+        if (c.equals(Color.ORANGE)) return "ORANGE"; // כתום
+        if (c.equals(Color.WHITE)) return "WHITE"; // לבן
+        return "RED"; // צבע ברירת מחדל
     }
 
     /**
      * [יעילות: O(1)] - חישוב מרחק של נקודה מקטע (Line Segment). משמש לזיהוי לחיצה על כביש.
      */
-    private double distToSegment(double px, double py, double x1, double y1, double x2, double y2) {
-        double l2 = Math.pow(x1-x2, 2) + Math.pow(y1-y2, 2); // אורך הקטע בריבוע
-        if (l2 == 0) return Math.hypot(px-x1, py-y1); // אם הקטע הוא בעצם נקודה
-        // חישוב ההיטל של הנקודה על הקטע
+    private double distToSegment(double px, double py, double x1, double y1, double x2, double y2) { // מתודת מרחק מקטע
+        double l2 = Math.pow(x1-x2, 2) + Math.pow(y1-y2, 2); // חישוב אורך הקטע בריבוע (למניעת שורש יקר)
+        if (l2 == 0) return Math.hypot(px-x1, py-y1); // טיפול במקרה שהקטע הוא בעצם נקודה
+        // חישוב ההיטל של הנקודה על הקטע (ערך t בין 0 ל-1)
         double t = Math.max(0, Math.min(1, ((px-x1)*(x2-x1) + (py-y1)*(y2-y1)) / l2));
-        return Math.hypot(px - (x1 + t*(x2-x1)), py - (y1 + t*(y2-y1))); // החזרת המרחק הקצר ביותר
+        return Math.hypot(px - (x1 + t*(x2-x1)), py - (y1 + t*(y2-y1))); // החזרת המרחק המינימלי מההיטל
     }
 
     /**
      * [יעילות: O(1)] - קבלת קואורדינטות מרכז של משושה בלוח.
      */
-    private double[] getHexCenter(Hex hex) {
-        int row = hex.getCoordinate().getY() + 2; // חישוב שורה (מיושר ל-0-4)
-        // חישוב היסט אופקי לפי השורה (שורות שונות מוזזות לצד ליצירת מבנה כוורת)
+    private double[] getHexCenter(Hex hex) { // מתודת חישוב מרכז משושה
+        int row = hex.getCoordinate().getY() + 2; // נרמול ציר ה-Y לטווח של 0-4
+        // חישוב היסט אופקי (שורות זוגיות ואי זוגיות מוזזות לצד ליצירת מבנה כוורת)
         double rowOff = (row==0 || row==4) ? X_STEP : (row==1 || row==3) ? X_STEP/2 : 0;
-        int col = hex.getCoordinate().getX() + (row==0?0 : row==1?1 : 2); // חישוב עמודה
-        return new double[]{START_X + rowOff + (col * X_STEP) + 80, START_Y + (row * Y_STEP) + 65}; // החזרת המרכז
+        int col = hex.getCoordinate().getX() + (row==0?0 : row==1?1 : 2); // נרמול ציר ה-X לפי השורה
+        return new double[]{START_X + rowOff + (col * X_STEP) + 80, START_Y + (row * Y_STEP) + 65}; // החזרת נקודת המרכז (X, Y)
     }
 
     /**
      * [יעילות: O(H)] - קבלת קואורדינטות קודקוד על המסך. סורק את המשושים כדי למצוא שייכות.
      */
-    private double[] getVertexCoords(Vertex v) {
-        for (Hex hex : engine.getBoard().getAllHexes()) { // עובר על כל המשושים
-            // אם זה משושה אמיתי (לא מים) והקודקוד שייך לו
+    private double[] getVertexCoords(Vertex v) { // מתודת חישוב מיקום קודקוד
+        for (Hex hex : engine.getBoard().getAllHexes()) { // סריקת כל משושי הלוח
+            // אם זה משושה יבשתי והקודקוד המבוקש שייך לרשימת קודקודיו
             if (hex.getType() != TerrainType.WATER_TILE && hex.getVertices().contains(v)) {
-                double[] center = getHexCenter(hex); // מרכז המשושה
-                double hX = center[0]-80, hY = center[1]-65; // פינה שמאלית עליונה
-                int idx = hex.getVertices().indexOf(v); // איזה מ-6 הקודקודים זה
-                if (idx == 0) return new double[]{hX+80, hY};
-                if (idx == 1) return new double[]{hX+160, hY+32.5};
-                if (idx == 2) return new double[]{hX+160, hY+97.5};
-                if (idx == 3) return new double[]{hX+80, hY+130};
-                if (idx == 4) return new double[]{hX, hY+97.5};
-                if (idx == 5) return new double[]{hX, hY+32.5};
+                double[] center = getHexCenter(hex); // חישוב מרכז המשושה האב
+                double hX = center[0]-80, hY = center[1]-65; // חישוב הפינה העליונה של המשושה
+                int idx = hex.getVertices().indexOf(v); // זיהוי אינדקס הקודקוד (0-5) בתוך המשושה
+                if (idx == 0) return new double[]{hX+80, hY}; // קודקוד עליון
+                if (idx == 1) return new double[]{hX+160, hY+32.5}; // קודקוד ימני עליון
+                if (idx == 2) return new double[]{hX+160, hY+97.5}; // קודקוד ימני תחתון
+                if (idx == 3) return new double[]{hX+80, hY+130}; // קודקוד תחתון
+                if (idx == 4) return new double[]{hX, hY+97.5}; // קודקוד שמאלי תחתון
+                if (idx == 5) return new double[]{hX, hY+32.5}; // קודקוד שמאלי עליון
             }
         }
-        return null; // לא נמצא
+        return null; // המיקום לא נמצא (למשל אם הקודקוד בלב ים)
     }
     
     /**
      * [יעילות: O(D)] - הצגת דיאלוג לשימוש בקלף פיתוח.
      */
-    private void showPlayDevCardDialog() {
-        Player human = engine.getCurrentPlayer();
-        List<DevCardType> playable = new ArrayList<>();
-        for (DevCardType card : human.getDevCards()) {
-            if (card != DevCardType.VICTORY_POINT) playable.add(card);
+    private void showPlayDevCardDialog() { // מתודת הצגת חלון שימוש בקלף
+        Player human = engine.getCurrentPlayer(); // קבלת השחקן הפעיל
+        List<DevCardType> playable = new ArrayList<>(); // רשימת קלפים הניתנים להפעלה
+        for (DevCardType card : human.getDevCards()) { // מעבר על קלפי הפיתוח של השחקן
+            if (card != DevCardType.VICTORY_POINT) playable.add(card); // נקודות ניצחון אינן קלף "פעיל" להפעלה
         }
 
-        if (playable.isEmpty()) {
-            lastAction = "אין לך קלפי פיתוח שניתן להשתמש בהם כרגע.";
-            refreshUI();
-            return;
+        if (playable.isEmpty()) { // אם אין קלפים זמינים לשימוש
+            lastAction = "אין לך קלפי פיתוח שניתן להשתמש בהם כרגע."; // עדכון הודעה
+            refreshUI(); // רענון
+            return; // יציאה
         }
 
-        ChoiceDialog<DevCardType> dialog = new ChoiceDialog<>(playable.get(0), playable);
-        dialog.setTitle("שימוש בקלף פיתוח");
-        dialog.setHeaderText("בחר קלף להפעלה:");
-        dialog.setContentText("קלף:");
+        ChoiceDialog<DevCardType> dialog = new ChoiceDialog<>(playable.get(0), playable); // יצירת חלון בחירה
+        dialog.setTitle("שימוש בקלף פיתוח"); // כותרת
+        dialog.setHeaderText("בחר קלף להפעלה:"); // כותרת משנה
+        dialog.setContentText("קלף:"); // טקסט בחירה
 
-        Optional<DevCardType> result = dialog.showAndWait();
-        result.ifPresent(card -> {
+        Optional<DevCardType> result = dialog.showAndWait(); // הצגת החלון והמתנה לבחירה
+        result.ifPresent(card -> { // אם המשתמש בחר קלף
             if (card == DevCardType.KNIGHT || card == DevCardType.ROAD_BUILDING) {
-                lastAction = engine.playDevCard(card);
+                lastAction = engine.playDevCard(card); // הפעלה ישירה עבור אביר או בניית דרכים
             } else if (card == DevCardType.YEAR_OF_PLENTY) {
-                handleYearOfPlenty(card);
+                handleYearOfPlenty(card); // הפעלה מיוחדת לשנת שפע (דורש בחירת משאבים)
             } else if (card == DevCardType.MONOPOLY) {
-                handleMonopoly(card);
+                handleMonopoly(card); // הפעלה מיוחדת למונופול (דורש בחירת משאב)
             }
-            refreshUI();
+            refreshUI(); // עדכון התצוגה לאחר הפעלת הקלף
         });
     }
 
-    private void handleYearOfPlenty(DevCardType card) {
-        Dialog<List<ResourceType>> resDialog = new Dialog<>();
-        resDialog.setTitle("שנת שפע");
-        resDialog.setHeaderText("בחר 2 משאבים לקבל מהבנק:");
+    private void handleYearOfPlenty(DevCardType card) { // מתודת טיפול בקלף שנת שפע
+        Dialog<List<ResourceType>> resDialog = new Dialog<>(); // יצירת חלון דיאלוג לבחירת משאבים
+        resDialog.setTitle("שנת שפע"); // כותרת
+        resDialog.setHeaderText("בחר 2 משאבים לקבל מהבנק:"); // הסבר
         
-        GridPane grid = new GridPane();
-        grid.setHgap(10); grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
+        GridPane grid = new GridPane(); // פריסה לבחירה
+        grid.setHgap(10); grid.setVgap(10); // רווחים
+        grid.setPadding(new Insets(20, 150, 10, 10)); // שוליים
 
-        ChoiceBox<ResourceType> c1 = new ChoiceBox<>();
-        c1.getItems().addAll(ResourceType.values());
-        c1.getItems().remove(ResourceType.NONE);
-        c1.setValue(ResourceType.WOOD);
+        ChoiceBox<ResourceType> c1 = new ChoiceBox<>(); // תיבת בחירה למשאב הראשון
+        c1.getItems().addAll(ResourceType.values()); // הוספת כל האפשרויות
+        c1.getItems().remove(ResourceType.NONE); // הסרת האפשרות הריקה
+        c1.setValue(ResourceType.WOOD); // ברירת מחדל - עץ
 
-        ChoiceBox<ResourceType> c2 = new ChoiceBox<>();
-        c2.getItems().addAll(ResourceType.values());
-        c2.getItems().remove(ResourceType.NONE);
-        c2.setValue(ResourceType.BRICK);
+        ChoiceBox<ResourceType> c2 = new ChoiceBox<>(); // תיבת בחירה למשאב השני
+        c2.getItems().addAll(ResourceType.values()); // הוספת כל האפשרויות
+        c2.getItems().remove(ResourceType.NONE); // הסרה
+        c2.setValue(ResourceType.BRICK); // ברירת מחדל - לבנה
 
-        grid.add(new Label("משאב 1:"), 0, 0); grid.add(c1, 1, 0);
-        grid.add(new Label("משאב 2:"), 0, 1); grid.add(c2, 1, 1);
+        grid.add(new Label("משאב 1:"), 0, 0); grid.add(c1, 1, 0); // הוספה לרשת
+        grid.add(new Label("משאב 2:"), 0, 1); grid.add(c2, 1, 1); // הוספה לרשת
 
-        resDialog.getDialogPane().setContent(grid);
-        resDialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        resDialog.getDialogPane().setContent(grid); // חיבור הרשת לחלון
+        resDialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL); // הוספת כפתורי אישור וביטול
 
-        resDialog.setResultConverter(btn -> btn == ButtonType.OK ? Arrays.asList(c1.getValue(), c2.getValue()) : null);
+        resDialog.setResultConverter(btn -> btn == ButtonType.OK ? Arrays.asList(c1.getValue(), c2.getValue()) : null); // הגדרת התוצאה
 
-        Optional<List<ResourceType>> res = resDialog.showAndWait();
-        res.ifPresent(list -> lastAction = engine.playDevCard(card, list.get(0), list.get(1)));
+        Optional<List<ResourceType>> res = resDialog.showAndWait(); // הצגת החלון
+        res.ifPresent(list -> lastAction = engine.playDevCard(card, list.get(0), list.get(1))); // ביצוע הפעולה במנוע במידה ואושר
     }
 
-    private void handleMonopoly(DevCardType card) {
-        List<ResourceType> options = new ArrayList<>(Arrays.asList(ResourceType.values()));
-        options.remove(ResourceType.NONE);
-        ChoiceDialog<ResourceType> resDialog = new ChoiceDialog<>(options.get(0), options);
-        resDialog.setTitle("מונופול");
-        resDialog.setHeaderText("בחר משאב לקחת מכל השחקנים:");
+    private void handleMonopoly(DevCardType card) { // מתודת טיפול בקלף מונופול
+        List<ResourceType> options = new ArrayList<>(Arrays.asList(ResourceType.values())); // יצירת רשימת משאבים
+        options.remove(ResourceType.NONE); // הסרת הסוג הלא רלוונטי
+        ChoiceDialog<ResourceType> resDialog = new ChoiceDialog<>(options.get(0), options); // חלון בחירה לסוג המשאב
+        resDialog.setTitle("מונופול"); // כותרת
+        resDialog.setHeaderText("בחר משאב לקחת מכל השחקנים:"); // הסבר למשתמש
         
-        Optional<ResourceType> res = resDialog.showAndWait();
-        res.ifPresent(r -> lastAction = engine.playDevCard(card, r));
+        Optional<ResourceType> res = resDialog.showAndWait(); // המתנה לבחירה
+        res.ifPresent(r -> lastAction = engine.playDevCard(card, r)); // הפעלת המונופול במנוע על המשאב שנבחר
     }
 
     /**
      * [יעילות: O(P * N)] - פונקציה להצגת דיאלוג מסחר אינטראקטיבי.
      */
-    private void showTradeDialog() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("מרכז המסחר");
-        dialog.setHeaderText("הצע עסקה לבוטים או סחור מול הבנק");
+    private void showTradeDialog() { // מתודת הצגת חלון מסחר
+        Dialog<ButtonType> dialog = new Dialog<>(); // יצירת חלון דיאלוג ראשי
+        dialog.setTitle("מרכז המסחר"); // כותרת הממשק
+        dialog.setHeaderText("הצע עסקה לבוטים או סחור מול הבנק"); // הנחיה למשתמש
 
-        GridPane grid = new GridPane();
-        grid.setHgap(10); grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
+        GridPane grid = new GridPane(); // פריסת רשת לבחירת רכיבי המסחר
+        grid.setHgap(10); grid.setVgap(10); // הגדרת רווחים
+        grid.setPadding(new Insets(20, 150, 10, 10)); // הגדרת שוליים
 
-        ChoiceBox<ResourceType> giveChoice = new ChoiceBox<>();
-        giveChoice.getItems().addAll(ResourceType.values());
-        giveChoice.getItems().remove(ResourceType.NONE);
-        giveChoice.setValue(ResourceType.WOOD);
+        ChoiceBox<ResourceType> giveChoice = new ChoiceBox<>(); // תיבה לבחירת המשאב שהשחקן נותן
+        giveChoice.getItems().addAll(ResourceType.values()); // הוספת המשאבים
+        giveChoice.getItems().remove(ResourceType.NONE); // ניקוי
+        giveChoice.setValue(ResourceType.WOOD); // ברירת מחדל
 
-        Spinner<Integer> giveAmt = new Spinner<>(1, 10, 1);
-        giveAmt.setEditable(true);
+        Spinner<Integer> giveAmt = new Spinner<>(1, 10, 1); // פקד בחירת כמות נתינה (1-10)
+        giveAmt.setEditable(true); // אפשור הקלדה ידנית
 
-        ChoiceBox<ResourceType> getChoice = new ChoiceBox<>();
-        getChoice.getItems().addAll(ResourceType.values());
-        getChoice.getItems().remove(ResourceType.NONE);
-        getChoice.setValue(ResourceType.WHEAT);
+        ChoiceBox<ResourceType> getChoice = new ChoiceBox<>(); // תיבה לבחירת המשאב המבוקש
+        getChoice.getItems().addAll(ResourceType.values()); // הוספת האפשרויות
+        getChoice.getItems().remove(ResourceType.NONE); // ניקוי
+        getChoice.setValue(ResourceType.WHEAT); // ברירת מחדל - חיטה
 
-        Spinner<Integer> getAmt = new Spinner<>(1, 10, 1);
-        getAmt.setEditable(true);
+        Spinner<Integer> getAmt = new Spinner<>(1, 10, 1); // פקד בחירת כמות קבלה
+        getAmt.setEditable(true); // אפשור הקלדה
 
-        grid.add(new Label("אתה נותן:"), 0, 0); grid.add(giveChoice, 1, 0); grid.add(giveAmt, 2, 0);
-        grid.add(new Label("אתה מקבל:"), 0, 1); grid.add(getChoice, 1, 1); grid.add(getAmt, 2, 1);
+        grid.add(new Label("אתה נותן:"), 0, 0); grid.add(giveChoice, 1, 0); grid.add(giveAmt, 2, 0); // סידור השורה הראשונה ברשת
+        grid.add(new Label("אתה מקבל:"), 0, 1); grid.add(getChoice, 1, 1); grid.add(getAmt, 2, 1); // סידור השורה השנייה ברשת
 
-        dialog.getDialogPane().setContent(grid);
-        ButtonType proposeBtn = new ButtonType("הצע לבוטים", ButtonBar.ButtonData.OK_DONE);
-        ButtonType bankBtn = new ButtonType("סחר מול הבנק", ButtonBar.ButtonData.OTHER);
-        dialog.getDialogPane().getButtonTypes().addAll(proposeBtn, bankBtn, ButtonType.CANCEL);
+        dialog.getDialogPane().setContent(grid); // הצבת הרשת בתוך גוף הדיאלוג
+        ButtonType proposeBtn = new ButtonType("הצע לבוטים", ButtonBar.ButtonData.OK_DONE); // יצירת כפתור להצעת הטרייד למחשב
+        ButtonType bankBtn = new ButtonType("סחר מול הבנק", ButtonBar.ButtonData.OTHER); // יצירת כפתור למסחר ישיר מול הבנק
+        dialog.getDialogPane().getButtonTypes().addAll(proposeBtn, bankBtn, ButtonType.CANCEL); // הוספת הכפתורים
 
-        dialog.setResultConverter(dialogButton -> dialogButton);
-        Optional<ButtonType> result = dialog.showAndWait();
+        dialog.setResultConverter(dialogButton -> dialogButton); // החזרת סוג הכפתור שנלחץ כתוצאה
+        Optional<ButtonType> result = dialog.showAndWait(); // הצגת החלון
 
-        if (result.isPresent()) {
-            ResourceType give = giveChoice.getValue();
-            int gAmt = giveAmt.getValue();
-            ResourceType get = getChoice.getValue();
-            int rAmt = getAmt.getValue();
-            Player human = engine.getCurrentPlayer();
+        if (result.isPresent()) { // אם המשתמש בחר באחת האפשרויות
+            ResourceType give = giveChoice.getValue(); // המשאב שהשחקן נותן
+            int gAmt = giveAmt.getValue(); // הכמות שהשחקן נותן
+            ResourceType get = getChoice.getValue(); // המשאב שהשחקן מבקש
+            int rAmt = getAmt.getValue(); // הכמות שהשחקן מבקש
+            Player human = engine.getCurrentPlayer(); // זיהוי השחקן הנוכחי
 
-            if (result.get() == proposeBtn) {
-                if (human.getResources().getOrDefault(give, 0) < gAmt) {
-                    lastAction = "אין לך מספיק " + give.toHebrew() + "!";
+            if (result.get() == proposeBtn) { // אם נבחרה הצעה לבוטים
+                if (human.getResources().getOrDefault(give, 0) < gAmt) { // בדיקה האם יש לשחקן מספיק משאבים לתת
+                    lastAction = "אין לך מספיק " + give.toHebrew() + "!"; // הודעת שגיאה
                 } else {
-                    boolean accepted = false;
-                    List<Player> players = engine.getPlayers();
-                    int i = 0;
-                    while (i < players.size() && !accepted) {
-                        Player p = players.get(i);
-                        if (p instanceof AiPlayer) {
-                            AiPlayer bot = (AiPlayer) p;
-                            if (bot.evaluateTradeOffer(Map.of(give, gAmt), Map.of(get, rAmt), human)) {
-                                engine.executeTrade(human, bot, Map.of(give, gAmt), Map.of(get, rAmt));
-                                lastAction = bot.getName() + " הסכים לעסקה!";
-                                accepted = true;
+                    boolean accepted = false; // דגל להצלחת המסחר
+                    List<Player> players = engine.getPlayers(); // קבלת רשימת כל השחקנים
+                    int i = 0; // אינדקס ללולאה
+                    while (i < players.size() && !accepted) { // מעבר על השחקנים עד שאחד מסכים
+                        Player p = players.get(i); // קבלת שחקן
+                        if (p instanceof AiPlayer) { // בדיקה האם זה בוט
+                            AiPlayer bot = (AiPlayer) p; // המרה לבוט
+                            if (bot.evaluateTradeOffer(Map.of(give, gAmt), Map.of(get, rAmt), human)) { // הערכה של הבוט
+                                engine.executeTrade(human, bot, Map.of(give, gAmt), Map.of(get, rAmt)); // ביצוע המסחר
+                                lastAction = bot.getName() + " הסכים לעסקה!"; // הודעת הצלחה
+                                accepted = true; // עדכון הדגל
                             }
                         }
-                        i++;
+                        i++; // קידום אינדקס
                     }
-                    if (!accepted) lastAction = "אף בוט לא מעוניין בעסקה הזו כרגע.";
+                    if (!accepted) lastAction = "אף בוט לא מעוניין בעסקה הזו כרגע."; // הודעת דחייה מכולם
                 }
-            } else if (result.get() == bankBtn) {
-                String res = engine.executeBankTrade(human, give, get);
-                if (res.startsWith("SUCCESS")) {
-                    lastAction = "ביצעת מסחר מול הבנק ביחס של " + res.split(":")[1] + ":1";
+            } else if (result.get() == bankBtn) { // אם נבחר מסחר מול הבנק
+                String res = engine.executeBankTrade(human, give, get); // ניסיון ביצוע מסחר מול הבנק
+                if (res.startsWith("SUCCESS")) { // אם המסחר הצליח
+                    lastAction = "ביצעת מסחר מול הבנק ביחס של " + res.split(":")[1] + ":1"; // הודעת הצלחה
                 } else {
-                    lastAction = "אין לך מספיק " + give.toHebrew() + " למסחר מול הבנק.";
+                    lastAction = "אין לך מספיק " + give.toHebrew() + " למסחר מול הבנק."; // הודעת שגיאה
                 }
             }
-            refreshUI();
+            refreshUI(); // עדכון התצוגה לאחר סיום הדיאלוג
         }
     }
-}
+} // סיום מחלקת CatanApp
